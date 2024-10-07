@@ -3,10 +3,10 @@ package analyze
 import (
 	"net"
 
-	"github.com/tom-draper/log-analyzer/internal/location"
-	"github.com/tom-draper/log-analyzer/internal/server"
+	"github.com/admpub/log-analyzer/internal/location"
+	"github.com/admpub/log-analyzer/internal/server"
 
-	"github.com/tom-draper/log-analyzer/pkg/parse"
+	"github.com/admpub/log-analyzer/pkg/parse"
 )
 
 func ipLocations(extraction []parse.Extraction) map[string]string {

@@ -1,4 +1,4 @@
-module github.com/tom-draper/log-analyzer
+module github.com/admpub/log-analyzer
 
 go 1.21
 

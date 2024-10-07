@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/tom-draper/log-analyzer/pkg/analyze"
-	"github.com/tom-draper/log-analyzer/pkg/parse"
+	"github.com/admpub/log-analyzer/pkg/analyze"
+	"github.com/admpub/log-analyzer/pkg/parse"
 )
 
 func main() {

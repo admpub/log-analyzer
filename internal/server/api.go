@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/admpub/log-analyzer/pkg/parse"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
-	"github.com/tom-draper/log-analyzer/pkg/parse"
 )
 
 type Data struct {
