@@ -47,14 +47,18 @@ func getParams(text string, regEx string) map[string]string {
 	return paramsMap
 }
 
+var escapeRegexCharactersReplacer = strings.NewReplacer(
+	"(", "\\(",
+	")", "\\)",
+	"]", "\\]",
+	"[", "\\[",
+	"“", "\"",
+)
+
 // Replace all characters that have a special meaning within a regular
 // expression with an escaped version of the character.
 func escapeRegexCharacters(regEx string) string {
-	regEx = strings.ReplaceAll(regEx, "(", "\\(")
-	regEx = strings.ReplaceAll(regEx, ")", "\\)")
-	regEx = strings.ReplaceAll(regEx, "]", "\\]")
-	regEx = strings.ReplaceAll(regEx, "[", "\\[")
-	regEx = strings.ReplaceAll(regEx, "“", "\"")
+	regEx = escapeRegexCharactersReplacer.Replace(regEx)
 	return regEx
 }
 
