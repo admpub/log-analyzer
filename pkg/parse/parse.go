@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/admpub/tail"
 	"github.com/araddon/dateparse"
 )
 
@@ -418,10 +419,20 @@ func ParseLines(lines []string, config *Config) ([]Extraction, error) {
 // into lines and attempts to extract tokens parameters from each line using the
 // most appropriate pattern in the given config.
 func ParseFile(path string, config *Config) ([]Extraction, error) {
-	body, err := os.ReadFile(path)
+	lastLines := config.LastLines
+	if lastLines <= 0 {
+		lastLines = 10000
+	}
+	var body string
+	ti, err := tail.TailFile(path, tail.Config{LastLines: lastLines})
+	// body, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	for line := range ti.Lines {
+		body += line.Text + "\n"
+	}
+
 	extraction, err := Parse(string(body), config)
 	if err != nil {
 		return nil, err

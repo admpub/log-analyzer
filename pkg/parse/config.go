@@ -12,6 +12,7 @@ type Config struct {
 	Patterns     []string              `json:"patterns"`
 	Dependencies map[string][]string   `json:"dependencies,omitempty"`
 	Conversions  map[string]Conversion `json:"conversions,omitempty"`
+	LastLines    int                   `json:"lastlines,omitempty"`
 }
 
 type Conversion struct {
