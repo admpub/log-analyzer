@@ -191,6 +191,8 @@ type PatternRank struct {
 	params map[string]Param
 }
 
+var multiSpaceRegEx = regexp.MustCompile(`[ ]{2,}`)
+
 // parseLine extracts token parameters from each line using the most appropriate
 // pattern in the given config.
 func parseLineSingle(line string, config *Config) (map[string]Param, string) {
@@ -200,7 +202,6 @@ func parseLineSingle(line string, config *Config) (map[string]Param, string) {
 		rank:   0.0,
 		params: make(map[string]Param),
 	}
-	multiSpaceRegEx := regexp.MustCompile(`[ ]{2,}`)
 	for _, pattern := range config.Patterns {
 		// If pattern containing no tokens is a plain text match for line
 		// Ensure usage of this pattern is recorded even if rank may not be best
