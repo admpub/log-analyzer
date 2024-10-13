@@ -13,6 +13,12 @@ type Config struct {
 	Dependencies map[string][]string   `json:"dependencies,omitempty"`
 	Conversions  map[string]Conversion `json:"conversions,omitempty"`
 	LastLines    int                   `json:"lastlines,omitempty"`
+	patternModes []PatternMode
+	hasMultiple  bool
+}
+
+type PatternMode struct {
+	LineCount int
 }
 
 type Conversion struct {
@@ -36,6 +42,17 @@ func LoadConfig(path string) (Config, error) {
 	if err := json.Unmarshal([]byte(byteValue), &config); err != nil {
 		fmt.Println(err)
 		return Config{}, err
+	}
+
+	config.patternModes = make([]PatternMode, len(config.Patterns))
+	for i, v := range config.Patterns {
+		md := PatternMode{
+			LineCount: patternLineCount(v),
+		}
+		if !config.hasMultiple && md.LineCount > 1 {
+			config.hasMultiple = true
+		}
+		config.patternModes[i] = md
 	}
 
 	return config, nil

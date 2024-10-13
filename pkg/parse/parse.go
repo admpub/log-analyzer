@@ -238,16 +238,23 @@ func parseLineSingle(line string, config *Config) (map[string]Param, string) {
 
 // parseLine extracts token parameters from each line using the most appropriate
 // pattern in the given config.
-func parseLine(lines []string, index int, config *Config) (map[string]Param, string) {
+func parseLine(lines []string, index int, config *Config) (map[string]Param, string, int) {
 	// Attempt to parse the line against each pattern in config, only taking the best
 	var patternUsed string
+	var patternLines int = 1
 	best := PatternRank{
 		rank:   0.0,
 		params: make(map[string]Param),
 	}
 	line := lines[index]
-	for _, pattern := range config.Patterns {
-		lineCount := patternLineCount(pattern)
+	pmcount := len(config.patternModes)
+	for pindex, pattern := range config.Patterns {
+		var lineCount int
+		if pmcount > pindex {
+			lineCount = config.patternModes[pindex].LineCount
+		} else {
+			lineCount = patternLineCount(pattern)
+		}
 		// If not enough lines remaining for multi-line pattern
 		if lineCount > 1 && index+lineCount > len(lines) {
 			continue
@@ -265,6 +272,7 @@ func parseLine(lines []string, index int, config *Config) (map[string]Param, str
 		patternTokenCounts := tokenCounts(pattern, config.Tokens)
 		if snippet == pattern && patternTokenCounts == 0 {
 			patternUsed = pattern // Force line to take this pattern
+			patternLines = lineCount
 			break
 		}
 
@@ -280,10 +288,11 @@ func parseLine(lines []string, index int, config *Config) (map[string]Param, str
 			best.rank = lineRank.rank
 			best.params = lineRank.params
 			patternUsed = pattern
+			patternLines = lineCount
 		}
 	}
 
-	return best.params, patternUsed
+	return best.params, patternUsed, patternLines
 }
 
 func parseSingleLine(line string, pattern string, config *Config) PatternRank {
@@ -361,23 +370,24 @@ func ParseFast(logtext string, config *Config) ([]Extraction, error) {
 
 // ParseLinesFast is identical to ParseLines but run concurrently.
 func ParseLinesFast(lines []string, config *Config) ([]Extraction, error) {
-	extraction := make([]Extraction, len(lines))
+	extraction := make([]Extraction, 0, len(lines))
 	var wg sync.WaitGroup
 	for i, line := range lines {
 		wg.Add(1)
-		go func(line string, extraction []Extraction, config *Config, lineIdx int, wg *sync.WaitGroup) {
+		go func(line string, config *Config, lineIdx int, wg *sync.WaitGroup) {
 			defer wg.Done()
 			params, patternUsed := parseLineSingle(line, config)
 			if patternUsed == "" {
 				log.Printf("no pattern matched line %d: \"%s\"\n", lineIdx+1, line)
+			} else {
+				extraction = append(extraction, Extraction{
+					Params:     params,
+					Pattern:    patternUsed,
+					LineNumber: lineIdx,
+					Line:       line,
+				})
 			}
-			extraction[lineIdx] = Extraction{
-				Params:     params,
-				Pattern:    patternUsed,
-				LineNumber: lineIdx,
-				Line:       line,
-			}
-		}(line, extraction, config, i, &wg)
+		}(line, config, i, &wg)
 	}
 	return extraction, nil
 }
@@ -392,25 +402,26 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 // ParseLines attempts to extract tokens parameters from each line using the
 // most appropriate pattern in the given config.
 func ParseLines(lines []string, config *Config) ([]Extraction, error) {
-	extraction := make([]Extraction, len(lines))
+	extraction := make([]Extraction, 0, len(lines))
 	var skipLines int
 	for i, line := range lines {
 		if skipLines > 0 {
 			skipLines--
 			continue
 		}
-		params, patternUsed := parseLine(lines, i, config)
+		params, patternUsed, patternLines := parseLine(lines, i, config)
 		if patternUsed == "" {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i+1, line)
-		}
-		extraction[i] = Extraction{
-			Params:     params,
-			Pattern:    patternUsed,
-			LineNumber: i,
-			Line:       line,
+		} else {
+			extraction = append(extraction, Extraction{
+				Params:     params,
+				Pattern:    patternUsed,
+				LineNumber: i,
+				Line:       line,
+			})
 		}
 		// If patten used was multi-line, skip the next lines
-		skipLines = patternLineCount(patternUsed) - 1
+		skipLines = patternLines - 1
 	}
 	return extraction, nil
 }
@@ -423,21 +434,36 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 	if lastLines <= 0 {
 		lastLines = 10000
 	}
-	var body string
+
 	ti, err := tail.TailFile(path, tail.Config{LastLines: lastLines})
-	// body, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
-	}
-	for line := range ti.Lines {
-		body += line.Text + "\n"
 	}
 
-	extraction, err := Parse(string(body), config)
-	if err != nil {
-		return nil, err
+	if config.hasMultiple {
+		var lines []string
+		for line := range ti.Lines {
+			lines = append(lines, line.Text)
+		}
+		return ParseLines(lines, config)
 	}
-	return extraction, err
+	extraction := []Extraction{}
+	var i int
+	for line := range ti.Lines {
+		params, patternUsed := parseLineSingle(line.Text, config)
+		if patternUsed == "" {
+			log.Printf("no pattern matched line %d: \"%s\"\n", i+1, line.Text)
+		} else {
+			extraction = append(extraction, Extraction{
+				Params:     params,
+				Pattern:    patternUsed,
+				LineNumber: i,
+				Line:       line.Text,
+			})
+		}
+		i++
+	}
+	return extraction, nil
 }
 
 // ParseFile reads the log text from each of the given file paths, separates the
@@ -505,10 +531,6 @@ func ParseFileTest(path string, config *Config) ([]Extraction, error) {
 		return nil, err
 	}
 	extractions := ParseTest(string(body), config)
-	if err != nil {
-		return nil, err
-	}
-
 	return extractions, nil
 }
 
