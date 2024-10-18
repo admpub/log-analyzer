@@ -2,7 +2,11 @@ package parse
 
 import (
 	"log"
+	"strings"
 	"testing"
+
+	"github.com/admpub/pp"
+	"github.com/stretchr/testify/assert"
 )
 
 type Profile struct {
@@ -256,4 +260,83 @@ func TestParseFile(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestParser(t *testing.T) {
+	extraction := []Extraction{}
+	var i int
+	var unusedLines []string
+	config := Config{
+		Tokens: []string{"ip_address", "timestamp", "method", "path", "status", "int_bytes", "url", "user_agent"},
+		Patterns: []string{
+			"ip_address - - [timestamp] \"method path *\" status int_bytes \"-\" \"user_agent\"",
+			"ip_address - - [timestamp] \"method path *\" status int_bytes \"url\" \"user_agent\"",
+		},
+		Dependencies: map[string][]string{
+			`path`: []string{"status", "int_bytes"},
+		},
+	}
+	config.SetDefaults()
+	parse := makeParser(&extraction, &unusedLines, &config)
+	lines := []string{
+		`- - - [17/May/2015:10:05:03 +0000] "GET /presentations/logstash-monitorama-2013/images/kibana-search.png HTTP/1.1" 200 203023 "http://semicomplete.com/presentations/logstash-monitorama-2013/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36"`,
+		`- - - [17/May/2015:10:05:43 +0000] "GET /presentations/logstash-monitorama-2013/images/kibana-dashboard3.png HTTP/1.1" 200 171717 "http://semicomplete.com/presentations/logstash-monitorama-2013/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36"`,
+		`other!!!!!!`,
+	}
+	for _, line := range lines {
+		parse(i, line)
+		i++
+	}
+	if len(unusedLines) > 0 {
+		for _index, _line := range unusedLines {
+			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
+		}
+	}
+	assert.Equal(t, 2, len(extraction))
+	pp.Println(extraction)
+}
+
+func TestParser2(t *testing.T) {
+	extraction := []Extraction{}
+	var i int
+	var unusedLines []string
+	config := Config{
+		Tokens: []string{"timestamp", "process", "message", "error_msg", "action", "status"},
+		Patterns: []string{
+			"timestamp :: process - message",
+			"timestamp :: process - status\n    -> error_msg",
+			"timestamp :: process - status\n    -> error_msg\n    -> action",
+		},
+	}
+	config.SetDefaults()
+	parse := makeParser(&extraction, &unusedLines, &config)
+	lines := strings.Split(`2015-07-12 14:59:23 :: process1 - starting process 1
+2015-07-12 14:59:23 :: process2 - starting process 2
+2015-07-12 14:59:23 :: process3 - starting process 3
+2015-07-12 14:59:23 :: process4 - starting process 4
+2015-07-12 14:59:24 :: process1 - WARNING
+    -> warning from process 1
+2015-07-12 14:59:25 :: process2 - WARNING
+    -> warning from process 2
+2015-07-12 14:59:27 :: process4 - CRITICAL ERROR
+    -> error in process 4
+    -> shutting down
+2015-07-12 14:59:27 :: process4 - stopping process 4
+2015-07-12 14:59:30 :: process3 - complete
+2015-07-12 14:59:30 :: process3 - stopping process 3
+2015-07-12 14:59:31 :: process1 - complete
+2015-07-12 14:59:31 :: process1 - stopping process 1
+2015-07-12 14:59:33 :: process2 - complete
+2015-07-12 14:59:33 :: process2 - stopping process 2`, "\n")
+	for _, line := range lines {
+		parse(i, line)
+		i++
+	}
+	if len(unusedLines) > 0 {
+		for _index, _line := range unusedLines {
+			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
+		}
+	}
+	assert.Equal(t, 14, len(extraction))
+	//pp.Println(extraction)
 }

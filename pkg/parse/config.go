@@ -5,20 +5,64 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 type Config struct {
-	Tokens       []string              `json:"tokens"`
-	Patterns     []string              `json:"patterns"`
-	Dependencies map[string][]string   `json:"dependencies,omitempty"`
-	Conversions  map[string]Conversion `json:"conversions,omitempty"`
-	LastLines    int                   `json:"lastlines,omitempty"`
-	patternModes []PatternMode
-	hasMultiple  bool
+	Tokens           []string              `json:"tokens"`
+	Patterns         []string              `json:"patterns"`
+	Dependencies     map[string][]string   `json:"dependencies,omitempty"`
+	Conversions      map[string]Conversion `json:"conversions,omitempty"`
+	LastLines        int                   `json:"lastlines,omitempty"`
+	patternCount     []PatternCount
+	hasMultiple      bool
+	mutilinePatterns map[int][]string //{Patterns.index:[]string}
+	useLastLine      bool
 }
 
-type PatternMode struct {
-	LineCount int
+func (c *Config) SetDefaults() {
+	c.mutilinePatterns = map[int][]string{}
+	c.patternCount = make([]PatternCount, len(c.Patterns))
+	for i, v := range c.Patterns {
+		md := PatternCount{
+			LineCount:  patternLineCount(v),
+			TokenCount: tokenCounts(v, c.Tokens),
+		}
+		if md.LineCount > 1 {
+			if !c.hasMultiple {
+				c.hasMultiple = true
+			}
+			c.mutilinePatterns[i] = splitLines(v)
+		}
+		c.patternCount[i] = md
+	}
+	if c.hasMultiple {
+		oldNew := make([]string, 0, len(c.Tokens)*2)
+		for _, token := range c.Tokens {
+			oldNew = append(oldNew, token, `{*}`)
+		}
+		repl := strings.NewReplacer(oldNew...)
+		for ix, pl := range c.mutilinePatterns {
+			fo := repl.Replace(pl[0])
+			for index, pattern := range c.Patterns {
+				if ix == index {
+					continue
+				}
+				if strings.HasPrefix(fo, repl.Replace(pattern)) {
+					c.useLastLine = true
+					break
+				}
+			}
+			if c.useLastLine {
+				break
+			}
+		}
+	}
+}
+
+type PatternCount struct {
+	LineCount  int
+	TokenCount int
 }
 
 type Conversion struct {
@@ -43,17 +87,6 @@ func LoadConfig(path string) (Config, error) {
 		fmt.Println(err)
 		return Config{}, err
 	}
-
-	config.patternModes = make([]PatternMode, len(config.Patterns))
-	for i, v := range config.Patterns {
-		md := PatternMode{
-			LineCount: patternLineCount(v),
-		}
-		if !config.hasMultiple && md.LineCount > 1 {
-			config.hasMultiple = true
-		}
-		config.patternModes[i] = md
-	}
-
+	config.SetDefaults()
 	return config, nil
 }
