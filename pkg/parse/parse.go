@@ -213,7 +213,7 @@ func parseLineSingle(line string, config *Config) (PatternRank, string) {
 		}
 		// If pattern containing no tokens is a plain text match for line
 		// Ensure usage of this pattern is recorded even if rank may not be best
-		patternTokenCounts := tokenCounts(pattern, config.Tokens)
+		patternTokenCounts := config.patternCount[pindex].TokenCount
 		if line == pattern && patternTokenCounts == 0 {
 			patternUsed = pattern
 			break
@@ -243,8 +243,7 @@ func parseLineSingle(line string, config *Config) (PatternRank, string) {
 	return best, patternUsed
 }
 
-func parseSingleLine(line string, pattern string, config *Config) PatternRank {
-	multiSpaceRegEx := regexp.MustCompile(`[ ]{2,}`)
+func parseSingleLine(line string, pattern string, patternTokenCounts int, config *Config) PatternRank {
 	lineRank := PatternRank{
 		rank:   0.0,
 		params: make(map[string]Param),
@@ -252,7 +251,6 @@ func parseSingleLine(line string, pattern string, config *Config) PatternRank {
 
 	// If pattern containing no tokens is a plain text match for line
 	// Ensure usage of this pattern is recorded
-	patternTokenCounts := tokenCounts(pattern, config.Tokens)
 	params := tryPattern(line, pattern, config.Tokens)
 	rank := calcExtractionRank(params, patternTokenCounts)
 	if rank > lineRank.rank {
@@ -275,11 +273,11 @@ func parseSingleLine(line string, pattern string, config *Config) PatternRank {
 	return lineRank
 }
 
-func parseMultiLine(lines []string, index int, patternLines []string, config *Config) PatternRank {
+func parseMultiLine(lines []string, index int, patternLines []string, patternTokenCounts int, config *Config) PatternRank {
 	lineRanks := make([]PatternRank, len(patternLines))
 	for i, patternLine := range patternLines {
 		line := lines[index+i]
-		lineBest := parseSingleLine(line, patternLine, config)
+		lineBest := parseSingleLine(line, patternLine, patternTokenCounts, config)
 		lineRanks[i] = lineBest
 	}
 
@@ -409,7 +407,7 @@ func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config)
 					if plen > unusedNum {
 						fixedUnused = getUnunsed(plen - unusedNum)
 					}
-					lineRank := parseMultiLine(fixedUnused, 0, patterns, config)
+					lineRank := parseMultiLine(fixedUnused, 0, patterns, config.patternCount[pindex].TokenCount, config)
 					// Record if this pattern is better than others seen so far
 					if lineRank.rank > recordedRank.rank {
 						recordedRank.rank = lineRank.rank
