@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/admpub/pp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -293,7 +292,7 @@ func TestParser(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 2, len(em.extraction))
-	pp.Println(em.extraction)
+	dump(em.extraction)
 }
 
 func TestParser2(t *testing.T) {
@@ -338,5 +337,5 @@ func TestParser2(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 14, len(em.extraction))
-	//pp.Println(em.extraction)
+	//dump(em.extraction)
 }
