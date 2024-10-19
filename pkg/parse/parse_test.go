@@ -263,7 +263,6 @@ func TestParseFile(t *testing.T) {
 }
 
 func TestParser(t *testing.T) {
-	extraction := []Extraction{}
 	var i int
 	var unusedLines []string
 	config := Config{
@@ -277,7 +276,8 @@ func TestParser(t *testing.T) {
 		},
 	}
 	config.SetDefaults()
-	parse := makeParser(&extraction, &unusedLines, &config)
+	em := &storageMemory{}
+	parse := makeParser(em, &unusedLines, &config)
 	lines := []string{
 		`- - - [17/May/2015:10:05:03 +0000] "GET /presentations/logstash-monitorama-2013/images/kibana-search.png HTTP/1.1" 200 203023 "http://semicomplete.com/presentations/logstash-monitorama-2013/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36"`,
 		`- - - [17/May/2015:10:05:43 +0000] "GET /presentations/logstash-monitorama-2013/images/kibana-dashboard3.png HTTP/1.1" 200 171717 "http://semicomplete.com/presentations/logstash-monitorama-2013/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1700.77 Safari/537.36"`,
@@ -292,12 +292,11 @@ func TestParser(t *testing.T) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	assert.Equal(t, 2, len(extraction))
-	pp.Println(extraction)
+	assert.Equal(t, 2, len(em.extraction))
+	pp.Println(em.extraction)
 }
 
 func TestParser2(t *testing.T) {
-	extraction := []Extraction{}
 	var i int
 	var unusedLines []string
 	config := Config{
@@ -309,7 +308,8 @@ func TestParser2(t *testing.T) {
 		},
 	}
 	config.SetDefaults()
-	parse := makeParser(&extraction, &unusedLines, &config)
+	em := &storageMemory{}
+	parse := makeParser(em, &unusedLines, &config)
 	lines := strings.Split(`2015-07-12 14:59:23 :: process1 - starting process 1
 2015-07-12 14:59:23 :: process2 - starting process 2
 2015-07-12 14:59:23 :: process3 - starting process 3
@@ -337,6 +337,6 @@ func TestParser2(t *testing.T) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	assert.Equal(t, 14, len(extraction))
-	//pp.Println(extraction)
+	assert.Equal(t, 14, len(em.extraction))
+	//pp.Println(em.extraction)
 }

@@ -20,8 +20,8 @@ import (
 	"github.com/araddon/dateparse"
 )
 
-func dump(v interface{}) {
-	pp.Println(v)
+func dump(v ...interface{}) {
+	pp.Println(v...)
 }
 
 type Extraction struct {
@@ -273,11 +273,11 @@ func parseSingleLine(line string, pattern string, patternTokenCounts int, config
 	return lineRank
 }
 
-func parseMultiLine(lines []string, index int, patternLines []string, patternTokenCounts int, config *Config) PatternRank {
-	lineRanks := make([]PatternRank, len(patternLines))
-	for i, patternLine := range patternLines {
+func parseMultiLine(lines []string, index int, partial PartialPattern, config *Config) PatternRank {
+	lineRanks := make([]PatternRank, len(partial.Patterns))
+	for i, patternLine := range partial.Patterns {
 		line := lines[index+i]
-		lineBest := parseSingleLine(line, patternLine, patternTokenCounts, config)
+		lineBest := parseSingleLine(line, patternLine, partial.TokenCount[i], config)
 		lineRanks[i] = lineBest
 	}
 
@@ -311,10 +311,10 @@ func splitLines(text string) []string {
 // parameters from each line using the most appropriate pattern in the given config.
 func Parse(logtext string, config *Config) ([]Extraction, error) {
 	lines := splitLines(logtext)
-	extraction := []Extraction{}
 	var i int
 	var unusedLines []string
-	parse := makeParser(&extraction, &unusedLines, config)
+	em := &storageMemory{}
+	parse := makeParser(em, &unusedLines, config)
 	for _, line := range lines {
 		parse(i, line)
 		i++
@@ -324,7 +324,7 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return extraction, nil
+	return em.extraction, nil
 }
 
 // ParseFile reads the log text from the given file path, separates the text
@@ -341,10 +341,10 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 		return nil, err
 	}
 
-	extraction := []Extraction{}
+	em := &storageMemory{}
 	var i int
 	var unusedLines []string
-	parse := makeParser(&extraction, &unusedLines, config)
+	parse := makeParser(em, &unusedLines, config)
 	for line := range ti.Lines {
 		parse(i, line.Text)
 		i++
@@ -354,28 +354,17 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return extraction, nil
+	return em.extraction, nil
 }
 
-func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config) func(index int, line string) {
+func makeParser(em Storager, unusedLines *[]string, config *Config) func(index int, line string) {
 	var lastRank PatternRank
 	var recordedRank *PatternRank
 	useLast := config.useLastLine
 	var getUnunsed = func(n int) []string {
 		var _unuseds []string
-		elen := len(*extraction)
-		if useLast && elen > 0 {
-			if elen > n {
-				_unuseds = make([]string, 0, len(*unusedLines)+n)
-				for _, extra := range (*extraction)[elen-n:] {
-					_unuseds = append(_unuseds, extra.Line)
-				}
-			} else {
-				_unuseds = make([]string, 0, len(*unusedLines)+elen)
-				for _, extra := range *extraction {
-					_unuseds = append(_unuseds, extra.Line)
-				}
-			}
+		if useLast {
+			_unuseds = append(_unuseds, em.GetLastLines(n)...)
 			_unuseds = append(_unuseds, *unusedLines...)
 		} else {
 			_unuseds = *unusedLines
@@ -398,8 +387,8 @@ func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config)
 				}
 				_unuseds := getUnunsed(0)
 				unusedNum := len(_unuseds)
-				for pindex, patterns := range config.mutilinePatterns {
-					plen := len(patterns)
+				for pindex, partial := range config.mutilinePatterns {
+					plen := len(partial.Patterns)
 					if plen < unusedNum {
 						continue
 					}
@@ -407,7 +396,7 @@ func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config)
 					if plen > unusedNum {
 						fixedUnused = getUnunsed(plen - unusedNum)
 					}
-					lineRank := parseMultiLine(fixedUnused, 0, patterns, config.patternCount[pindex].TokenCount, config)
+					lineRank := parseMultiLine(fixedUnused, 0, partial, config)
 					// Record if this pattern is better than others seen so far
 					if lineRank.rank > recordedRank.rank {
 						recordedRank.rank = lineRank.rank
@@ -425,12 +414,12 @@ func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config)
 					if !config.useLastLine {
 						extra.LineNumber += 1
 					}
-					if useLast && len(*extraction) > 0 {
-						(*extraction)[len(*extraction)-1] = extra
+					if useLast {
+						em.Update(extra)
 					} else {
-						*extraction = append(*extraction, extra)
+						em.Append(extra)
 					}
-					//dump((*extraction)[len(*extraction)-1])
+					//dump(extra)
 					*unusedLines = (*unusedLines)[0:0]
 					recordedRank = nil
 				}
@@ -439,12 +428,13 @@ func makeParser(extraction *[]Extraction, unusedLines *[]string, config *Config)
 			}
 		} else {
 			lastRank = patternRank
-			*extraction = append(*extraction, Extraction{
+			extra := Extraction{
 				Params:     patternRank.params,
 				Pattern:    patternUsed,
 				LineNumber: index + 1,
 				Line:       line,
-			})
+			}
+			em.Append(extra)
 			if config.hasMultiple && len(*unusedLines) > 0 {
 				for _index, _line := range *unusedLines {
 					log.Printf("no pattern matched line %d: \"%s\"\n", index+1-len(*unusedLines)+_index, _line)

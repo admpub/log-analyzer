@@ -16,12 +16,17 @@ type Config struct {
 	LastLines        int                   `json:"lastlines,omitempty"`
 	patternCount     []PatternCount
 	hasMultiple      bool
-	mutilinePatterns map[int][]string //{Patterns.index:[]string}
+	mutilinePatterns map[int]PartialPattern //{Patterns.index:[]string}
 	useLastLine      bool
 }
 
+type PartialPattern struct {
+	Patterns   []string
+	TokenCount []int
+}
+
 func (c *Config) SetDefaults() {
-	c.mutilinePatterns = map[int][]string{}
+	c.mutilinePatterns = map[int]PartialPattern{}
 	c.patternCount = make([]PatternCount, len(c.Patterns))
 	for i, v := range c.Patterns {
 		md := PatternCount{
@@ -32,7 +37,14 @@ func (c *Config) SetDefaults() {
 			if !c.hasMultiple {
 				c.hasMultiple = true
 			}
-			c.mutilinePatterns[i] = splitLines(v)
+			partial := PartialPattern{
+				Patterns: splitLines(v),
+			}
+			partial.TokenCount = make([]int, len(partial.Patterns))
+			for pi, pv := range partial.Patterns {
+				partial.TokenCount[pi] = tokenCounts(pv, c.Tokens)
+			}
+			c.mutilinePatterns[i] = partial
 		}
 		c.patternCount[i] = md
 	}
@@ -43,7 +55,7 @@ func (c *Config) SetDefaults() {
 		}
 		repl := strings.NewReplacer(oldNew...)
 		for ix, pl := range c.mutilinePatterns {
-			fo := repl.Replace(pl[0])
+			fo := repl.Replace(pl.Patterns[0])
 			for index, pattern := range c.Patterns {
 				if ix == index {
 					continue
