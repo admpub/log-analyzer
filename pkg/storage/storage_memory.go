@@ -1,27 +1,31 @@
-package parse
+package storage
 
-type Storager interface {
-	Append(Extraction) error
-	Update(Extraction) error
-	GetLastLines(n int) []string
+import "github.com/admpub/log-analyzer/pkg/extraction"
+
+func init() {
+	Register(`memory`, func() (Storager, error) { return &storageMemory{}, nil })
 }
 
 type storageMemory struct {
-	extraction []Extraction
+	extraction []extraction.Extraction
 }
 
-func (e *storageMemory) Append(extra Extraction) error {
+func (e *storageMemory) Append(extra extraction.Extraction) error {
 	e.extraction = append(e.extraction, extra)
 	return nil
 }
 
-func (e *storageMemory) Update(extra Extraction) error {
+func (e *storageMemory) Update(extra extraction.Extraction) error {
 	if len(e.extraction) > 0 {
 		e.extraction[len(e.extraction)-1] = extra
 	} else {
 		e.extraction = append(e.extraction, extra)
 	}
 	return nil
+}
+
+func (e *storageMemory) List() ([]extraction.Extraction, error) {
+	return e.extraction, nil
 }
 
 func (e *storageMemory) GetLastLines(n int) (unuseds []string) {
@@ -40,4 +44,7 @@ func (e *storageMemory) GetLastLines(n int) (unuseds []string) {
 		}
 	}
 	return
+}
+
+func (e *storageMemory) Close() {
 }

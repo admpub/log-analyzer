@@ -13,7 +13,8 @@ type Config struct {
 	Patterns         []string              `json:"patterns"`
 	Dependencies     map[string][]string   `json:"dependencies,omitempty"`
 	Conversions      map[string]Conversion `json:"conversions,omitempty"`
-	LastLines        int                   `json:"lastlines,omitempty"`
+	LastLines        int                   `json:"lastLines,omitempty"`
+	StorageEngine    string                `json:"storageEngine,omitempty"`
 	patternCount     []PatternCount
 	hasMultiple      bool
 	mutilinePatterns map[int]PartialPattern //{Patterns.index:[]string}
@@ -26,6 +27,9 @@ type PartialPattern struct {
 }
 
 func (c *Config) SetDefaults() {
+	if len(c.StorageEngine) == 0 {
+		c.StorageEngine = `memory`
+	}
 	c.mutilinePatterns = map[int]PartialPattern{}
 	c.patternCount = make([]PatternCount, len(c.Patterns))
 	for i, v := range c.Patterns {

@@ -7,33 +7,23 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/admpub/log-analyzer/pkg/extraction"
+	"github.com/admpub/log-analyzer/pkg/storage"
 	"github.com/admpub/pp"
 	"github.com/admpub/tail"
-	"github.com/araddon/dateparse"
 )
+
+type Extraction = extraction.Extraction
+type Param = extraction.Param
 
 func dump(v ...interface{}) {
 	pp.Println(v...)
-}
-
-type Extraction struct {
-	Params     map[string]Param `json:"params"`
-	Pattern    string           `json:"pattern"`
-	LineNumber int              `json:"lineNumber"`
-	Line       string           `json:"line"`
-}
-
-type Param struct {
-	Value any    `json:"value"`
-	Type  string `json:"type"`
 }
 
 // getParams extracts all possible group values contained within the regular
@@ -122,51 +112,7 @@ func tryPattern(line string, pattern string, tokens []string) map[string]Param {
 func inferDataTypes(params map[string]string) map[string]Param {
 	typedParams := make(map[string]Param)
 	for token, match := range params {
-		// Check for explicit type in token name
-		if strings.HasPrefix(token, "int_") {
-			if value, err := strconv.Atoi(match); err == nil {
-				typedParams[token] = Param{Value: value, Type: "int"}
-			}
-			continue
-		} else if strings.HasPrefix(token, "float_") {
-			if value, err := strconv.ParseFloat(match, 64); strings.Contains(match, ".") && err == nil {
-				typedParams[token] = Param{Value: value, Type: "float"}
-			}
-			continue
-		} else if strings.HasPrefix(token, "time_") {
-			if value, err := dateparse.ParseAny(match); err == nil {
-				typedParams[token] = Param{Value: value, Type: "time"}
-			}
-			continue
-		} else if strings.HasPrefix(token, "bool_") {
-			if value, err := strconv.ParseBool(match); err == nil {
-				typedParams[token] = Param{Value: value, Type: "bool"}
-			}
-			continue
-		} else if strings.HasPrefix(token, "ip_") {
-			if value := net.ParseIP(match); value != nil {
-				typedParams[token] = Param{Value: value, Type: "ip"}
-			}
-			continue
-		} else if strings.HasPrefix(token, "str_") {
-			typedParams[token] = Param{Value: match, Type: "str"}
-			continue
-		}
-
-		// Attempt to parse as datetime
-		if value, err := dateparse.ParseAny(match); err == nil {
-			typedParams[token] = Param{Value: value, Type: "time"}
-		} else if value := net.ParseIP(match); value != nil {
-			typedParams[token] = Param{Value: value, Type: "ip"}
-		} else if value, err := strconv.ParseFloat(match, 64); strings.Contains(match, ".") && err == nil {
-			typedParams[token] = Param{Value: value, Type: "float"}
-		} else if value, err := strconv.Atoi(match); err == nil {
-			typedParams[token] = Param{Value: value, Type: "int"}
-		} else if value, err := strconv.ParseBool(match); err == nil {
-			typedParams[token] = Param{Value: value, Type: "bool"}
-		} else {
-			typedParams[token] = Param{Value: match, Type: "str"}
-		}
+		typedParams[token] = extraction.MakeParam(token, match)
 	}
 	return typedParams
 }
@@ -313,7 +259,11 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 	lines := splitLines(logtext)
 	var i int
 	var unusedLines []string
-	em := &storageMemory{}
+	em, err := storage.New(config.StorageEngine)
+	if err != nil {
+		return nil, err
+	}
+	defer em.Close()
 	parse := makeParser(em, &unusedLines, config)
 	for _, line := range lines {
 		parse(i, line)
@@ -324,7 +274,7 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return em.extraction, nil
+	return em.List()
 }
 
 // ParseFile reads the log text from the given file path, separates the text
@@ -341,7 +291,11 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 		return nil, err
 	}
 
-	em := &storageMemory{}
+	em, err := storage.New(config.StorageEngine)
+	if err != nil {
+		return nil, err
+	}
+	defer em.Close()
 	var i int
 	var unusedLines []string
 	parse := makeParser(em, &unusedLines, config)
@@ -354,10 +308,10 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return em.extraction, nil
+	return em.List()
 }
 
-func makeParser(em Storager, unusedLines *[]string, config *Config) func(index int, line string) {
+func makeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) {
 	var lastRank PatternRank
 	var recordedRank *PatternRank
 	useLast := config.useLastLine
