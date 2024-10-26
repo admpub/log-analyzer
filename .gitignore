@@ -3,3 +3,5 @@
 /test-*.json
 .vscode
 run.sh
+duck.db
+duck.db.*

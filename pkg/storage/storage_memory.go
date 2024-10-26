@@ -1,9 +1,13 @@
 package storage
 
-import "github.com/admpub/log-analyzer/pkg/extraction"
+import (
+	"net/url"
+
+	"github.com/admpub/log-analyzer/pkg/extraction"
+)
 
 func init() {
-	Register(`memory`, func() (Storager, error) { return &storageMemory{}, nil })
+	Register(`memory`, func(_ *url.URL) (Storager, error) { return &storageMemory{}, nil })
 }
 
 type storageMemory struct {
@@ -24,7 +28,7 @@ func (e *storageMemory) Update(extra extraction.Extraction) error {
 	return nil
 }
 
-func (e *storageMemory) List() ([]extraction.Extraction, error) {
+func (e *storageMemory) List(limit int) ([]extraction.Extraction, error) {
 	return e.extraction, nil
 }
 

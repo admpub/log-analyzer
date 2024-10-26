@@ -6,6 +6,8 @@ import (
 
 	"github.com/admpub/log-analyzer/pkg/analyze"
 	"github.com/admpub/log-analyzer/pkg/parse"
+
+	_ "github.com/admpub/log-analyzer/pkg/storage/duckdb"
 )
 
 func main() {

@@ -274,7 +274,7 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return em.List()
+	return em.List(config.LastLines)
 }
 
 // ParseFile reads the log text from the given file path, separates the text
@@ -308,7 +308,7 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return em.List()
+	return em.List(lastLines)
 }
 
 func makeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) {

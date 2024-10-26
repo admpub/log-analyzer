@@ -3,13 +3,17 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/admpub/log"
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/admpub/log-analyzer/pkg/storage"
 	"github.com/jmoiron/sqlx"
 	"github.com/marcboeker/go-duckdb"
+	"github.com/webx-top/com"
 )
 
 const tableName = `LogAnalyzer`
@@ -18,8 +22,34 @@ func init() {
 	storage.Register(`duckdb`, newDuckDB)
 }
 
-func newDuckDB() (storage.Storager, error) {
-	db, err := sqlx.Open("duckdb", "")
+// duckdb://
+func newDuckDB(settings *url.URL) (storage.Storager, error) {
+	var storagePath string
+	if settings != nil {
+		var err error
+		storagePath = settings.Path
+		if len(settings.Path) > 0 {
+			storagePath, err = url.PathUnescape(storagePath)
+			if err != nil {
+				return nil, err
+			}
+			storagePath = settings.Host + storagePath
+		} else {
+			storagePath = settings.Query().Get(`path`)
+		}
+		if len(storagePath) > 0 {
+			switch storagePath[len(storagePath)-1] {
+			case '/', '\\':
+				com.MkdirAll(storagePath, 0760)
+				storagePath = filepath.Join(storagePath, `duck.db`)
+			default:
+				if com.IsDir(storagePath) {
+					storagePath = filepath.Join(storagePath, `duck.db`)
+				}
+			}
+		}
+	}
+	db, err := sqlx.Open("duckdb", storagePath)
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +110,39 @@ func (e *storageDuckDB) Update(extra extraction.Extraction) error {
 	return err
 }
 
-func (e *storageDuckDB) List() ([]extraction.Extraction, error) {
+func (e *storageDuckDB) List(limit int) ([]extraction.Extraction, error) {
 	var list []extraction.Extraction
-	r, err := e.db.Query(`SELECT * FROM ` + tableName + ` LIMIT 10`)
+	r, err := e.db.Query(`SELECT * FROM ` + tableName + ` LIMIT ` + strconv.Itoa(limit))
+	if err != nil {
+		return list, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var row extraction.Extraction
+		var params duckdb.Map
+		err = r.Scan(&row.Pattern, &row.LineNumber, &row.Line, &params)
+		if err != nil {
+			return list, err
+		}
+		row.Params = FromDuckMap(params)
+		list = append(list, row)
+	}
+	return list, err
+}
+
+func (e *storageDuckDB) ListBy(args map[string]interface{}, limit int) ([]extraction.Extraction, error) {
+	var list []extraction.Extraction
+	where := make([]string, 0, len(args))
+	for key := range args {
+		field := strings.ReplaceAll(key, "`", "``")
+		where = append(where, "`"+field+"`=:"+key)
+	}
+	query := `SELECT * FROM ` + tableName
+	if len(where) > 0 {
+		query += ` WHERE ` + strings.Join(where, ` `)
+	}
+	query += ` LIMIT ` + strconv.Itoa(limit)
+	r, err := e.db.NamedQuery(query, args)
 	if err != nil {
 		return list, err
 	}

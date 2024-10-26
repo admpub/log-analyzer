@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"net/url"
 	"testing"
 
 	"github.com/admpub/log-analyzer/pkg/extraction"
@@ -10,13 +11,17 @@ import (
 )
 
 func TestCreateTable(t *testing.T) {
-	a, err := newDuckDB()
+	a, err := newDuckDB(nil)
 	assert.NoError(t, err)
 	a.Close()
+	u, err := url.Parse(`duckdb://./eee`)
+	assert.NoError(t, err)
+	assert.Equal(t, `.`, u.Host)
+	assert.Equal(t, `/eee`, u.Path)
 }
 
 func TestAppend(t *testing.T) {
-	a, err := newDuckDB()
+	a, err := newDuckDB(nil)
 	assert.NoError(t, err)
 	data := extraction.Extraction{
 		Params: map[string]extraction.Param{
@@ -64,7 +69,7 @@ func TestAppend(t *testing.T) {
 	pp.Println(lines)
 	err = a.Update(data)
 	assert.NoError(t, err)
-	list, err := a.List()
+	list, err := a.List(100)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(list))
 	pp.Println(list)

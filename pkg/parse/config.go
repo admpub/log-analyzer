@@ -30,6 +30,9 @@ func (c *Config) SetDefaults() {
 	if len(c.StorageEngine) == 0 {
 		c.StorageEngine = `memory`
 	}
+	if c.LastLines <= 0 {
+		c.LastLines = 10000
+	}
 	c.mutilinePatterns = map[int]PartialPattern{}
 	c.patternCount = make([]PatternCount, len(c.Patterns))
 	for i, v := range c.Patterns {

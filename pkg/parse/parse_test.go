@@ -294,7 +294,7 @@ func TestParser(t *testing.T) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	list, _ := em.List()
+	list, _ := em.List(100)
 	assert.Equal(t, 2, len(list))
 	dump(list)
 }
@@ -342,7 +342,7 @@ func TestParser2(t *testing.T) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	list, _ := em.List()
+	list, _ := em.List(100)
 	assert.Equal(t, 14, len(list))
 	//dump(list)
 }
