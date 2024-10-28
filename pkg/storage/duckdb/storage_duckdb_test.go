@@ -3,11 +3,13 @@ package storage
 import (
 	"database/sql"
 	"net/url"
+	"path/filepath"
 	"testing"
 
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/admpub/pp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateTable(t *testing.T) {
@@ -106,10 +108,36 @@ func TestAppend(t *testing.T) {
 		Valid: true,
 	}, sum2)
 
-	top, err := a.(*storageDuckDB).Top(`int_bytes`, 100)
+	top, err := a.(*storageDuckDB).TopInteger(`int_bytes`, 100)
 	assert.NoError(t, err)
 	assert.Equal(t, []map[string]any{
 		{`203023`: int64(1)},
 	}, top)
+	a.Close()
+}
+
+func _TestData(t *testing.T) {
+	dbPath, err := filepath.Abs(`../../../tests/data/`)
+	require.NoError(t, err)
+	t.Logf(`%s`, dbPath)
+	u, err := url.Parse(`duckdb://` + dbPath + `/`)
+	require.NoError(t, err)
+	a, err := newDuckDB(u)
+	assert.NoError(t, err)
+	top, err := a.(*storageDuckDB).TopInteger(`int_bytes`, 3)
+	assert.NoError(t, err)
+	pp.Println(top)
+	top, err = a.(*storageDuckDB).TopCount(`path`, 3)
+	assert.NoError(t, err)
+	pp.Println(top)
+	top, err = a.(*storageDuckDB).TopCount(`ip_address`, 3)
+	assert.NoError(t, err)
+	pp.Println(top)
+	top, err = a.(*storageDuckDB).TopCount(`user_agent`, 3)
+	assert.NoError(t, err)
+	pp.Println(top)
+	top, err = a.(*storageDuckDB).TopCount(`status`, 3)
+	assert.NoError(t, err)
+	pp.Println(top)
 	a.Close()
 }
