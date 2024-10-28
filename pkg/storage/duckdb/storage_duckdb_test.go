@@ -105,5 +105,11 @@ func TestAppend(t *testing.T) {
 		Int64: 203023,
 		Valid: true,
 	}, sum2)
+
+	top, err := a.(*storageDuckDB).Top(`int_bytes`, 100)
+	assert.NoError(t, err)
+	assert.Equal(t, []map[string]any{
+		{`203023`: int64(1)},
+	}, top)
 	a.Close()
 }
