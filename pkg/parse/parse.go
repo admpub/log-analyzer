@@ -255,16 +255,22 @@ func splitLines(text string) []string {
 
 // Parse separates the log text into lines and attempts to extract tokens
 // parameters from each line using the most appropriate pattern in the given config.
-func Parse(logtext string, config *Config) ([]Extraction, error) {
+func Parse(logtext string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
 	lines := splitLines(logtext)
+	var em storage.Storager
+	if len(storager) > 0 && storager[0] != nil {
+		em = storager[0]
+	} else {
+		var err error
+		em, err = storage.New(config.StorageEngine)
+		if err != nil {
+			return nil, err
+		}
+		defer em.Close()
+	}
 	var i int
 	var unusedLines []string
-	em, err := storage.New(config.StorageEngine)
-	if err != nil {
-		return nil, err
-	}
-	defer em.Close()
-	parse := makeParser(em, &unusedLines, config)
+	parse := MakeParser(em, &unusedLines, config)
 	for _, line := range lines {
 		parse(i, line)
 		i++
@@ -280,25 +286,24 @@ func Parse(logtext string, config *Config) ([]Extraction, error) {
 // ParseFile reads the log text from the given file path, separates the text
 // into lines and attempts to extract tokens parameters from each line using the
 // most appropriate pattern in the given config.
-func ParseFile(path string, config *Config) ([]Extraction, error) {
-	lastLines := config.LastLines
-	if lastLines <= 0 {
-		lastLines = 10000
-	}
-
-	ti, err := tail.TailFile(path, tail.Config{LastLines: lastLines})
+func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
+	ti, err := tail.TailFile(path, tail.Config{LastLines: config.LastLines})
 	if err != nil {
 		return nil, err
 	}
-
-	em, err := storage.New(config.StorageEngine)
-	if err != nil {
-		return nil, err
+	var em storage.Storager
+	if len(storager) > 0 && storager[0] != nil {
+		em = storager[0]
+	} else {
+		em, err = storage.New(config.StorageEngine)
+		if err != nil {
+			return nil, err
+		}
+		defer em.Close()
 	}
-	defer em.Close()
 	var i int
 	var unusedLines []string
-	parse := makeParser(em, &unusedLines, config)
+	parse := MakeParser(em, &unusedLines, config)
 	for line := range ti.Lines {
 		parse(i, line.Text)
 		i++
@@ -308,10 +313,10 @@ func ParseFile(path string, config *Config) ([]Extraction, error) {
 			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
 		}
 	}
-	return em.List(lastLines)
+	return em.List(config.LastLines)
 }
 
-func makeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) {
+func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) {
 	var lastRank PatternRank
 	var recordedRank *PatternRank
 	useLast := config.useLastLine
@@ -405,8 +410,13 @@ func makeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 // using the most appropriate pattern in the given config.
 func ParseFiles(paths []string, config *Config) ([]Extraction, error) {
 	extraction := make([]Extraction, 0)
+	em, err := storage.New(config.StorageEngine)
+	if err != nil {
+		return nil, err
+	}
+	defer em.Close()
 	for _, path := range paths {
-		ex, err := ParseFile(path, config)
+		ex, err := ParseFile(path, config, em)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse file at path %s: %w", path, err)
 		}
@@ -447,8 +457,8 @@ type ExtractionDebug struct {
 
 // ParseTest runs Parse and displays a random sample of extracted parameters
 // along with the origin lines from the log text.
-func ParseTest(logtext string, config *Config) []Extraction {
-	extractions, err := Parse(logtext, config)
+func ParseTest(logtext string, config *Config, storager ...storage.Storager) []Extraction {
+	extractions, err := Parse(logtext, config, storager...)
 	if err != nil {
 		panic(err)
 	}
@@ -459,12 +469,12 @@ func ParseTest(logtext string, config *Config) []Extraction {
 
 // ParseTest runs ParseFile and displays a random sample of extracted parameters
 // along with the origin lines from the log file.
-func ParseFileTest(path string, config *Config) ([]Extraction, error) {
+func ParseFileTest(path string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	extractions := ParseTest(string(body), config)
+	extractions := ParseTest(string(body), config, storager...)
 	return extractions, nil
 }
 
@@ -472,10 +482,14 @@ func ParseFileTest(path string, config *Config) ([]Extraction, error) {
 // parameters along with the origin lines from the log files.
 func ParseFilesTest(paths []string, config *Config) ([]Extraction, error) {
 	extractions := make([]Extraction, 0)
-
+	em, err := storage.New(config.StorageEngine)
+	if err != nil {
+		return nil, err
+	}
+	defer em.Close()
 	var parsedAny bool
 	for _, path := range paths {
-		r, err := ParseFileTest(path, config)
+		r, err := ParseFileTest(path, config, em)
 		if err != nil {
 			log.Printf("unable to read file at path %s: %s\n", path, fmt.Sprint(err))
 			continue
