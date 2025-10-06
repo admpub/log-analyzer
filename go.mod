@@ -10,6 +10,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/render v1.0.3
+	github.com/go-echarts/go-echarts/v2 v2.6.3
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/marcboeker/go-duckdb/v2 v2.4.1
 	github.com/oschwald/geoip2-golang v1.13.0
