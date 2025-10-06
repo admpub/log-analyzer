@@ -79,7 +79,7 @@ func (e *storageDuckDB) TopCount(key string, limit int) ([]map[string]any, error
 func (e *storageDuckDB) Sum(key string) (int64, error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	r, err := e.db.Query(`SELECT SUM(TRY_CAST(` + dbField + ` AS BIGINT)) AS num FROM ` + tableName + ` WHERE TRY_CAST(` + dbField + ` AS BIGINT)>0 GROUP BY ` + dbField + ` ORDER BY SUM(TRY_CAST(` + dbField + ` AS BIGINT)) DESC`)
+	r, err := e.db.Query(`SELECT SUM(TRY_CAST(` + dbField + ` AS BIGINT)) AS num FROM ` + tableName + ` WHERE TRY_CAST(` + dbField + ` AS BIGINT)>0`)
 	if err != nil {
 		return 0, err
 	}
