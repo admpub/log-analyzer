@@ -255,7 +255,7 @@ func splitLines(text string) []string {
 
 // Parse separates the log text into lines and attempts to extract tokens
 // parameters from each line using the most appropriate pattern in the given config.
-func Parse(logtext string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
+func ParseText(logtext string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
 	lines := splitLines(logtext)
 	var em storage.Storager
 	if len(storager) > 0 && storager[0] != nil {
@@ -458,7 +458,7 @@ type ExtractionDebug struct {
 // ParseTest runs Parse and displays a random sample of extracted parameters
 // along with the origin lines from the log text.
 func ParseTest(logtext string, config *Config, storager ...storage.Storager) []Extraction {
-	extractions, err := Parse(logtext, config, storager...)
+	extractions, err := ParseText(logtext, config, storager...)
 	if err != nil {
 		panic(err)
 	}
