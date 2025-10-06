@@ -76,7 +76,7 @@ func TestAppend(t *testing.T) {
 	assert.Equal(t, 1, len(list))
 	pp.Println(list)
 
-	r, err := a.(*storageDuckDB).db.Query(`SELECT SUM(TRY_CAST(Params['int_bytes'][1] AS BIGINT)) FROM ` + tableName)
+	r, err := a.(*storageDuckDB).db.Query(`SELECT SUM(TRY_CAST(Params['int_bytes'] AS BIGINT)) FROM ` + tableName)
 	//r, err := a.(*storageDuckDB).db.Query(`SELECT Params['int_bytes'][1] FROM ` + tableName)
 	assert.NoError(t, err)
 	defer r.Close()
@@ -93,7 +93,7 @@ func TestAppend(t *testing.T) {
 	}, sum)
 	pp.Println(sum)
 
-	r, err = a.(*storageDuckDB).db.Query(`SELECT SUM(TRY_CAST(Params['int_bytes'][1] AS BIGINT)) FROM ` + tableName + ` WHERE Params['int_bytes'][1]='203023'`)
+	r, err = a.(*storageDuckDB).db.Query(`SELECT SUM(TRY_CAST(Params['int_bytes'] AS BIGINT)) FROM ` + tableName + ` WHERE Params['int_bytes']='203023'`)
 	assert.NoError(t, err)
 	defer r.Close()
 	var sum2 sql.NullInt64
@@ -113,6 +113,10 @@ func TestAppend(t *testing.T) {
 	assert.Equal(t, []map[string]any{
 		{`203023`: int64(1)},
 	}, top)
+
+	sums, err := a.(*storageDuckDB).Sum(`int_bytes`)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(203023), sums)
 	a.Close()
 }
 

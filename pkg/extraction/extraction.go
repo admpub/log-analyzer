@@ -9,7 +9,7 @@ import (
 )
 
 type Extraction struct {
-	Params     map[string]Param `json:"params"`
+	Params     map[string]Param `json:"params"` // keys: int_bytes ip_address method path status timestamp url user_agent
 	Pattern    string           `json:"pattern"`
 	LineNumber int              `json:"lineNumber"`
 	Line       string           `json:"line"`

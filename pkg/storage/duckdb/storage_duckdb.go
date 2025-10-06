@@ -12,7 +12,7 @@ import (
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/admpub/log-analyzer/pkg/storage"
 	"github.com/jmoiron/sqlx"
-	"github.com/marcboeker/go-duckdb"
+	"github.com/marcboeker/go-duckdb/v2"
 	"github.com/webx-top/com"
 )
 

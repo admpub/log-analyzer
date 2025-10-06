@@ -7,7 +7,7 @@ import (
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/webx-top/com"
 
-	"github.com/marcboeker/go-duckdb"
+	"github.com/marcboeker/go-duckdb/v2"
 )
 
 func FromDuckMap(params duckdb.Map) map[string]extraction.Param {
