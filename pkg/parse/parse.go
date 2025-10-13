@@ -6,17 +6,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"net"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/admpub/log"
 	"github.com/admpub/log-analyzer/pkg/extraction"
+	"github.com/admpub/log-analyzer/pkg/geoip"
 	"github.com/admpub/log-analyzer/pkg/storage"
 	"github.com/admpub/pp"
 	"github.com/admpub/tail"
+	"github.com/medama-io/go-useragent"
 )
 
 type Extraction = extraction.Extraction
@@ -107,6 +111,26 @@ func tryPattern(line string, pattern string, tokens []string) map[string]Param {
 	return typedParams
 }
 
+var ua = useragent.NewParser()
+var geoipdb *geoip.DB
+var GeoIPDBPath string
+var geoipOnce sync.Once
+
+func initGeoIP() {
+	if len(GeoIPDBPath) > 0 {
+		var err error
+		geoipdb, err = geoip.New(GeoIPDBPath)
+		if err != nil {
+			log.Fatalf("unable to load GeoIP database: %v", err)
+		}
+	}
+}
+
+func GeoIP() *geoip.DB {
+	geoipOnce.Do(initGeoIP)
+	return geoipdb
+}
+
 // inferDataTypes infers the intended the data type of each extracted parameter
 // value from a log text line and performs a data type conversion.
 func inferDataTypes(params map[string]string) map[string]Param {
@@ -114,6 +138,69 @@ func inferDataTypes(params map[string]string) map[string]Param {
 	for token, match := range params {
 		typedParams[token] = extraction.MakeParam(token, match)
 	}
+	for token, param := range typedParams {
+		if param.Type == `time` {
+			typedParams[`unix`+token] = Param{
+				Value: param.Value.(time.Time).Unix(),
+				Type:  "int",
+			}
+		}
+	}
+	if userAgent, ok := typedParams["user_agent"]; ok {
+		agent := ua.Parse(userAgent.Value.(string))
+		typedParams[`browser`] = Param{
+			Value: agent.Browser(),
+			Type:  "str",
+		}
+		typedParams[`os`] = Param{
+			Value: agent.OS(),
+			Type:  "str",
+		}
+		typedParams[`device`] = Param{
+			Value: agent.Device(),
+			Type:  "str",
+		}
+	}
+	clientIP, ok := typedParams["ip_address"]
+	if !ok {
+		clientIP, ok = typedParams["ip"]
+	}
+	if ok {
+		var cc string
+		var lo string
+		var longtitude, latitude float64
+		geoipdb := GeoIP()
+		if geoipdb != nil {
+			if ip, ok := clientIP.Value.(net.IP); ok && ip != nil {
+				record, err := geoipdb.LookupCountry(ip)
+				if err != nil {
+					log.Warnf("unable to retrieve IP country code: %v", err)
+				} else {
+					cc = record.Country.ISOCode
+					longtitude = record.Location.Longitude
+					latitude = record.Location.Latitude
+					lo = record.LocationString()
+				}
+			}
+		}
+		typedParams[`country_code`] = Param{
+			Value: cc,
+			Type:  "str",
+		}
+		typedParams[`location`] = Param{
+			Value: lo,
+			Type:  "str",
+		}
+		typedParams[`longtitude`] = Param{
+			Value: longtitude,
+			Type:  "float",
+		}
+		typedParams[`latitude`] = Param{
+			Value: latitude,
+			Type:  "float",
+		}
+	}
+
 	return typedParams
 }
 
@@ -277,7 +364,7 @@ func ParseText(logtext string, config *Config, storager ...storage.Storager) ([]
 	}
 	if len(unusedLines) > 0 {
 		for _index, _line := range unusedLines {
-			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
+			log.Warnf("no pattern matched line %d: %q", i-len(unusedLines)+_index, _line)
 		}
 	}
 	return em.List(config.LastLines)
@@ -287,7 +374,10 @@ func ParseText(logtext string, config *Config, storager ...storage.Storager) ([]
 // into lines and attempts to extract tokens parameters from each line using the
 // most appropriate pattern in the given config.
 func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
-	ti, err := tail.TailFile(path, tail.Config{LastLines: config.LastLines})
+	tcfg := tail.Config{
+		LastLines: config.LastLines,
+	}
+	ti, err := tail.TailFile(path, tcfg)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +400,7 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 	}
 	if len(unusedLines) > 0 {
 		for _index, _line := range unusedLines {
-			log.Printf("no pattern matched line %d: \"%s\"\n", i-len(unusedLines)+_index, _line)
+			log.Warnf("no pattern matched line %d: %q", i-len(unusedLines)+_index, _line)
 		}
 	}
 	return em.List(config.LastLines)
@@ -383,7 +473,7 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 					recordedRank = nil
 				}
 			} else {
-				log.Printf("no pattern matched line %d: \"%s\"\n", index+1, line)
+				log.Warnf("no pattern matched line %d: %q", index+1, line)
 			}
 		} else {
 			lastRank = patternRank
@@ -396,7 +486,7 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 			em.Append(extra)
 			if config.hasMultiple && len(*unusedLines) > 0 {
 				for _index, _line := range *unusedLines {
-					log.Printf("no pattern matched line %d: \"%s\"\n", index+1-len(*unusedLines)+_index, _line)
+					log.Warnf("no pattern matched line %d: %q", index+1-len(*unusedLines)+_index, _line)
 				}
 				*unusedLines = (*unusedLines)[0:0]
 				recordedRank = nil
@@ -491,7 +581,7 @@ func ParseFilesTest(paths []string, config *Config) ([]Extraction, error) {
 	for _, path := range paths {
 		r, err := ParseFileTest(path, config, em)
 		if err != nil {
-			log.Printf("unable to read file at path %s: %s\n", path, fmt.Sprint(err))
+			log.Warnf("unable to read file at path %s: %v", path, err)
 			continue
 		}
 		parsedAny = true

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/admpub/pp"
@@ -120,7 +121,7 @@ func TestAppend(t *testing.T) {
 	a.Close()
 }
 
-func _TestData(t *testing.T) {
+func TestData(t *testing.T) {
 	dbPath, err := filepath.Abs(`../../../tests/data/`)
 	require.NoError(t, err)
 	t.Logf(`%s`, dbPath)
@@ -128,13 +129,20 @@ func _TestData(t *testing.T) {
 	require.NoError(t, err)
 	a, err := newDuckDB(u)
 	assert.NoError(t, err)
+	defer a.Close()
 	top, err := a.(*storageDuckDB).TopInteger(`int_bytes`, 3)
 	assert.NoError(t, err)
 	pp.Println(top)
-	top, err = a.(*storageDuckDB).TopCount(`path`, 3)
+
+	top, err = a.(*storageDuckDB).TopCount(`path`, 3, time.Unix(1760323517, 0))
 	assert.NoError(t, err)
 	pp.Println(top)
-	top, err = a.(*storageDuckDB).TopCount(`ip_address`, 3)
+
+	top, err = a.(*storageDuckDB).TopCount(`ip_address`, 100)
+	assert.NoError(t, err)
+	pp.Println(top)
+	t.Logf(`ip_address count: %d`, len(top))
+	top, err = a.(*storageDuckDB).TopCount(`country_code`, 3)
 	assert.NoError(t, err)
 	pp.Println(top)
 	top, err = a.(*storageDuckDB).TopCount(`user_agent`, 3)
@@ -143,5 +151,27 @@ func _TestData(t *testing.T) {
 	top, err = a.(*storageDuckDB).TopCount(`status`, 3)
 	assert.NoError(t, err)
 	pp.Println(top)
-	a.Close()
+
+	var n int64
+	n, err = a.(*storageDuckDB).DistinctCount(`ip_address`)
+	assert.NoError(t, err)
+	t.Logf(`UV: %d`, n)
+
+	n, err = a.(*storageDuckDB).Total()
+	assert.NoError(t, err)
+	t.Logf(`total: %d`, n)
+
+	return
+
+	// -- list --
+
+	var rows []extraction.Extraction
+	rows, err = a.(*storageDuckDB).List(3)
+	assert.NoError(t, err)
+	pp.Println(rows)
+
+	var maps []map[string]any
+	maps, err = a.(*storageDuckDB).ListMaps(3)
+	assert.NoError(t, err)
+	pp.Println(maps)
 }

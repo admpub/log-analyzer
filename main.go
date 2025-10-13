@@ -10,6 +10,8 @@ import (
 	_ "github.com/admpub/log-analyzer/pkg/storage/duckdb"
 )
 
+// CGO_ENABLED=1 go run . --geoip ./dbip-city-lite-2025-10.mmdb -c tests/data/configs/Apache-duckdb.json ./access.log
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("no log file paths provided\nprovide log file path(s) as command-line arguments\n\nexample:\n./main ./logs/postgres-main.log ./logs/postgres-1.log")
@@ -89,6 +91,9 @@ func getCommandLineArgs() (logPaths []string, configPath string, test bool, prin
 			continue
 		} else if arg == "-c" || arg == "--config" {
 			// Skip as path will be recorded next iteration
+			continue
+		} else if arg == "-g" || arg == "--geoip" {
+			parse.GeoIPDBPath = os.Args[i+1]
 			continue
 		} else if i > 1 && (os.Args[i-1] == "-c" || os.Args[i-1] == "--config") {
 			configPath = os.Args[i]

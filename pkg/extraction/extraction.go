@@ -34,6 +34,10 @@ func MakeParam(token, match string) Param {
 		if value, err := dateparse.ParseAny(match); err == nil {
 			return Param{Value: value, Type: "time"}
 		}
+	case `unixtimestamp`:
+		if value, err := strconv.ParseInt(match, 10, 64); err == nil {
+			return Param{Value: value, Type: "int"}
+		}
 	case `bool`:
 		if value, err := strconv.ParseBool(match); err == nil {
 			return Param{Value: value, Type: "bool"}

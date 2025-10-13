@@ -130,6 +130,32 @@ func (e *storageDuckDB) List(limit int) ([]extraction.Extraction, error) {
 	return list, err
 }
 
+func (e *storageDuckDB) ListMaps(limit int) ([]map[string]interface{}, error) {
+	var list []map[string]interface{}
+	var orderBy string
+	// timeField := `Params['unixtimestamp']`
+	// orderBy = ` ORDER BY TRY_CAST(` + timeField + ` AS BIGINT) DESC`
+	r, err := e.db.Query(`SELECT * FROM ` + tableName + orderBy + ` LIMIT ` + strconv.Itoa(limit))
+	if err != nil {
+		return list, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var row extraction.Extraction
+		var params duckdb.Map
+		err = r.Scan(&row.Pattern, &row.LineNumber, &row.Line, &params)
+		if err != nil {
+			return list, err
+		}
+		strKeyMap := map[string]interface{}{}
+		for k, v := range params {
+			strKeyMap[k.(string)] = v
+		}
+		list = append(list, strKeyMap)
+	}
+	return list, err
+}
+
 func (e *storageDuckDB) ListBy(args map[string]interface{}, limit int) ([]extraction.Extraction, error) {
 	var list []extraction.Extraction
 	where := make([]string, 0, len(args))
@@ -181,6 +207,20 @@ func (e *storageDuckDB) GetLastLines(n int) (unuseds []string) {
 		unuseds = append(unuseds, lines[j])
 	}
 	return
+}
+
+func (e *storageDuckDB) Total() (int64, error) {
+	r, err := e.db.Query(`SELECT COUNT(1) AS num FROM ` + tableName)
+	if err != nil {
+		return 0, err
+	}
+	defer r.Close()
+	for r.Next() {
+		var num sql.NullInt64
+		err = r.Scan(&num)
+		return num.Int64, err
+	}
+	return 0, err
 }
 
 func (e *storageDuckDB) Close() {
