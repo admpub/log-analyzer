@@ -11,6 +11,7 @@ import (
 )
 
 // CGO_ENABLED=1 go run . --geoip ./dbip-city-lite-2025-10.mmdb -c tests/data/configs/Apache-duckdb.json ./access.log
+// CGO_ENABLED=1 go run . --geoip ./dbip-city-lite-2025-10.mmdb --parse -c tests/data/configs/Apache-duckdb.json ./access.log
 
 func main() {
 	if len(os.Args) < 2 {
