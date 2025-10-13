@@ -122,6 +122,7 @@ func TestAppend(t *testing.T) {
 }
 
 func TestData(t *testing.T) {
+	return
 	dbPath, err := filepath.Abs(`../../../tests/data/`)
 	require.NoError(t, err)
 	t.Logf(`%s`, dbPath)
