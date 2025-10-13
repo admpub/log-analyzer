@@ -1,4 +1,4 @@
-package storage
+package duckdb
 
 import (
 	"database/sql"
@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/admpub/log"
 	"github.com/admpub/log-analyzer/pkg/extraction"
@@ -209,8 +210,12 @@ func (e *storageDuckDB) GetLastLines(n int) (unuseds []string) {
 	return
 }
 
-func (e *storageDuckDB) Total() (int64, error) {
-	r, err := e.db.Query(`SELECT COUNT(1) AS num FROM ` + tableName)
+func (e *storageDuckDB) Total(startAndEndTime ...time.Time) (int64, error) {
+	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	if len(where) > 0 {
+		where = ` WHERE ` + where
+	}
+	r, err := e.db.Query(`SELECT COUNT(1) AS num FROM ` + tableName + where)
 	if err != nil {
 		return 0, err
 	}
@@ -221,6 +226,59 @@ func (e *storageDuckDB) Total() (int64, error) {
 		return num.Int64, err
 	}
 	return 0, err
+}
+
+var datetimeReplacer = strings.NewReplacer(
+	`%Y`, `2006`,
+	`%m`, `01`,
+	`%d`, `02`,
+	`%H`, `15`,
+	`%I`, `03`,
+	`%M`, `04`,
+	`%S`, `05`,
+	`%p`, `PM`,
+	`%z`, `-0700`,
+	`%Z`, `MST`,
+)
+
+func (e *storageDuckDB) TotalByTime(timeFormat string, startAndEndTime ...time.Time) ([]CountItem, error) {
+	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	if len(where) > 0 {
+		where = ` WHERE ` + where
+	}
+	timeField := `STRPTIME(Params['timestamp'],'%Y-%m-%d %H:%M:%S %z %Z')`
+	timeField = `CAST(` + timeField + ` AS TIMESTAMP)`
+	timeFormatField := `STRFTIME(` + timeField + `, '` + timeFormat + `')`
+	r, err := e.db.Query(`SELECT COUNT(1) AS num,` + timeFormatField + ` AS tim FROM ` + tableName + where + ` GROUP BY ` + timeFormatField + ` ORDER BY tim ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	goTimeLayout := datetimeReplacer.Replace(timeFormat)
+	var results []CountItem
+	for r.Next() {
+		var num sql.NullInt64
+		var tim sql.NullString
+		err = r.Scan(&num, &tim)
+		if err != nil {
+			return nil, err
+		}
+		//panic(hour.String)
+		t, err := time.Parse(goTimeLayout, tim.String)
+		if err != nil {
+			return nil, err
+		}
+		extra := map[string]any{
+			`date`: t.Format(time.DateOnly),
+			`hour`: t.Hour(),
+			`day`:  t.Day(),
+		}
+		results = append(results, CountItem{
+			Count: num.Int64,
+			Extra: extra,
+		})
+	}
+	return results, err
 }
 
 func (e *storageDuckDB) Close() {

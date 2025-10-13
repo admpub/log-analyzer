@@ -377,6 +377,14 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 	tcfg := tail.Config{
 		LastLines: config.LastLines,
 	}
+	var size int64
+	if config.ShowProgress {
+		if fi, err := os.Stat(path); err != nil {
+			return nil, err
+		} else {
+			size = fi.Size()
+		}
+	}
 	ti, err := tail.TailFile(path, tcfg)
 	if err != nil {
 		return nil, err
@@ -385,7 +393,7 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 	if len(storager) > 0 && storager[0] != nil {
 		em = storager[0]
 	} else {
-		em, err = storage.New(config.StorageEngine)
+		em, err = config.Storager()
 		if err != nil {
 			return nil, err
 		}
@@ -394,9 +402,20 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 	var i int
 	var unusedLines []string
 	parse := MakeParser(em, &unusedLines, config)
+	var toBytes int64
+	if config.ShowProgress {
+		fmt.Println("")
+	}
 	for line := range ti.Lines {
 		parse(i, line.Text)
 		i++
+		if config.ShowProgress {
+			toBytes += int64(len(line.Text) + 1)
+			fmt.Printf("\r%s: %.2f%%", path, min((float64(toBytes)/float64(size))*100, 100))
+		}
+	}
+	if config.ShowProgress {
+		fmt.Println("")
 	}
 	if len(unusedLines) > 0 {
 		for _index, _line := range unusedLines {
@@ -498,13 +517,19 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 // ParseFile reads the log text from each of the given file paths, separates the
 // text into lines and attempts to extract tokens parameters from each line
 // using the most appropriate pattern in the given config.
-func ParseFiles(paths []string, config *Config) ([]Extraction, error) {
+func ParseFiles(paths []string, config *Config, storager ...storage.Storager) ([]Extraction, error) {
 	extraction := make([]Extraction, 0)
-	em, err := storage.New(config.StorageEngine)
-	if err != nil {
-		return nil, err
+	var em storage.Storager
+	var err error
+	if len(storager) > 0 && storager[0] != nil {
+		em = storager[0]
+	} else {
+		em, err = config.Storager()
+		if err != nil {
+			return nil, err
+		}
+		defer em.Close()
 	}
-	defer em.Close()
 	for _, path := range paths {
 		ex, err := ParseFile(path, config, em)
 		if err != nil {

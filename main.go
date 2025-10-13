@@ -41,17 +41,23 @@ func main() {
 		return
 	}
 
-	// Extract tokens from log files
 	var extraction []parse.Extraction
+	/*/ Extract tokens from log files
+	em, err := config.Storager()
+	if err != nil {
+		fmt.Printf("unable to parse log files: %v\n", err)
+		return
+	}
+	defer config.Close()
 	if len(logPaths) == 1 {
-		extraction, err = parse.ParseFile(logPaths[0], &config)
+		extraction, err = parse.ParseFile(logPaths[0], &config, em)
 		if err != nil {
-			fmt.Printf("unable to parse log file: %s\n", fmt.Sprint(err))
+			fmt.Printf("unable to parse log file: %v\n", err)
 		}
 	} else {
-		extraction, err = parse.ParseFiles(logPaths, &config)
+		extraction, err = parse.ParseFiles(logPaths, &config, em)
 		if err != nil {
-			fmt.Printf("unable to parse log files: %s\n", fmt.Sprint(err))
+			fmt.Printf("unable to parse log files: %v\n", err)
 		}
 	}
 
@@ -62,7 +68,7 @@ func main() {
 		fmt.Println("no tokens extracted\nensure patterns in `config/config.json` are correct and all tokens are named")
 		return
 	}
-
+	*/
 	if printLines {
 		parse.DisplayLines(extraction)
 	}

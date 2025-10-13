@@ -1,8 +1,9 @@
-package storage
+package duckdb
 
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/admpub/log-analyzer/pkg/extraction"
 	"github.com/webx-top/com"
@@ -84,4 +85,12 @@ func AsDuckMap(params map[string]extraction.Param) string {
 	}
 	q.WriteString(`}`)
 	return q.String()
+}
+
+func DayStart(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+func DayEnd(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, t.Location())
 }

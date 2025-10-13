@@ -1,10 +1,12 @@
-package charts
+package chartutil
 
 import (
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
 )
+
+// https://github.com/go-echarts/examples
 
 func Title(title, subtitle string, options ...func(*opts.Title)) charts.GlobalOpts {
 	option := opts.Title{

@@ -1,4 +1,4 @@
-package storage
+package duckdb
 
 import (
 	"database/sql"
@@ -122,7 +122,7 @@ func TestAppend(t *testing.T) {
 }
 
 func TestData(t *testing.T) {
-	return
+	//return
 	dbPath, err := filepath.Abs(`../../../tests/data/`)
 	require.NoError(t, err)
 	t.Logf(`%s`, dbPath)
@@ -153,14 +153,14 @@ func TestData(t *testing.T) {
 	assert.NoError(t, err)
 	pp.Println(top)
 
-	var n int64
-	n, err = a.(*storageDuckDB).DistinctCount(`ip_address`)
+	var counts []CountItem
+	counts, err = a.(*storageDuckDB).DistinctCountByTime(`ip_address`, `%Y-%m-%d`)
 	assert.NoError(t, err)
-	t.Logf(`UV: %d`, n)
+	pp.Println(`UV:`, counts)
 
-	n, err = a.(*storageDuckDB).Total()
+	counts, err = a.(*storageDuckDB).TotalByTime(`%d %H`, time.Now().Add(-time.Hour*24*2))
 	assert.NoError(t, err)
-	t.Logf(`total: %d`, n)
+	pp.Println(`PV:`, counts)
 
 	return
 

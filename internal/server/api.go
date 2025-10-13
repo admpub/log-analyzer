@@ -10,12 +10,34 @@ import (
 	"github.com/admpub/log-analyzer/pkg/parse"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
+	"github.com/go-echarts/go-echarts/v2/opts"
 )
 
 type Data struct {
 	Extraction []parse.Extraction `json:"extraction"`
 	Locations  map[string]string  `json:"locations"`
 	Config     *parse.Config      `json:"config"`
+}
+
+func getWeekdayName(weekday int) string {
+	switch weekday {
+	case 0:
+		return "周日"
+	case 1:
+		return "周一"
+	case 2:
+		return "周二"
+	case 3:
+		return "周三"
+	case 4:
+		return "周四"
+	case 5:
+		return "周五"
+	case 6:
+		return "周六"
+	default:
+		return "Unknown"
+	}
 }
 
 func Start(data *Data) {
@@ -40,6 +62,11 @@ func Start(data *Data) {
 			render.Render(w, r, ErrInternalServerError(err))
 		}
 		w.Write(jsonString)
+	})
+	historyTimeStyle := &opts.ItemStyle{Color: "#ccc"}
+	barOptItemStyle := func(bd *opts.BarData) { bd.ItemStyle = historyTimeStyle }
+	r.Get("/chart", func(w http.ResponseWriter, r *http.Request) {
+		handleChart(w, r, data.Config, barOptItemStyle)
 	})
 
 	fmt.Println("Dashboard running at http://localhost:3000/")

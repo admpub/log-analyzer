@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/admpub/log-analyzer/pkg/storage"
 )
 
 type Config struct {
@@ -14,7 +16,9 @@ type Config struct {
 	Dependencies     map[string][]string   `json:"dependencies,omitempty"`
 	Conversions      map[string]Conversion `json:"conversions,omitempty"`
 	LastLines        int                   `json:"lastLines,omitempty"`
+	ShowProgress     bool                  `json:"showProgress,omitempty"`
 	StorageEngine    string                `json:"storageEngine,omitempty"`
+	storager         storage.Storager
 	patternCount     []PatternCount
 	hasMultiple      bool
 	mutilinePatterns map[int]PartialPattern //{Patterns.index:[]string}
@@ -24,6 +28,23 @@ type Config struct {
 type PartialPattern struct {
 	Patterns   []string
 	TokenCount []int
+}
+
+func (c *Config) Storager() (storage.Storager, error) {
+	if c.storager == nil {
+		var err error
+		c.storager, err = storage.New(c.StorageEngine)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return c.storager, nil
+}
+
+func (c *Config) Close() {
+	if c.storager != nil {
+		c.storager.Close()
+	}
 }
 
 func (c *Config) SetDefaults() {
