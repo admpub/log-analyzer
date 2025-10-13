@@ -7,5 +7,6 @@
   "dependencies": {
     "path": ["status", "int_bytes"]
   },
-  "storageEngine": "duckdb://./tests/data/"
+  "storageEngine": "duckdb://./tests/data/",
+  "showProgress": true
 }

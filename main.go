@@ -18,7 +18,7 @@ func main() {
 		return
 	}
 
-	logPaths, configPath, test, printLines := getCommandLineArgs()
+	logPaths, configPath, test, printLines, parseLog := getCommandLineArgs()
 	// Default to ./config.json
 	if configPath == "" {
 		configPath = "./config/config.json"
@@ -42,35 +42,36 @@ func main() {
 	}
 
 	var extraction []parse.Extraction
-	/*/ Extract tokens from log files
-	em, err := config.Storager()
-	if err != nil {
-		fmt.Printf("unable to parse log files: %v\n", err)
-		return
-	}
-	defer config.Close()
-	if len(logPaths) == 1 {
-		extraction, err = parse.ParseFile(logPaths[0], &config, em)
-		if err != nil {
-			fmt.Printf("unable to parse log file: %v\n", err)
-		}
-	} else {
-		extraction, err = parse.ParseFiles(logPaths, &config, em)
+	if parseLog {
+		// Extract tokens from log files
+		em, err := config.Storager()
 		if err != nil {
 			fmt.Printf("unable to parse log files: %v\n", err)
+			return
 		}
-	}
+		defer config.Close()
+		if len(logPaths) == 1 {
+			extraction, err = parse.ParseFile(logPaths[0], &config, em)
+			if err != nil {
+				fmt.Printf("unable to parse log file: %v\n", err)
+			}
+		} else {
+			extraction, err = parse.ParseFiles(logPaths, &config, em)
+			if err != nil {
+				fmt.Printf("unable to parse log files: %v\n", err)
+			}
+		}
 
-	if len(extraction) == 0 {
-		fmt.Println("no lines extracted\nensure log file path is correct")
-		return
-	} else if !tokensExtracted(extraction) {
-		fmt.Println("no tokens extracted\nensure patterns in `config/config.json` are correct and all tokens are named")
-		return
-	}
-	*/
-	if printLines {
-		parse.DisplayLines(extraction)
+		if len(extraction) == 0 {
+			fmt.Println("no lines extracted\nensure log file path is correct")
+			return
+		} else if !tokensExtracted(extraction) {
+			fmt.Println("no tokens extracted\nensure patterns in `config/config.json` are correct and all tokens are named")
+			return
+		}
+		if printLines {
+			parse.DisplayLines(extraction)
+		}
 	}
 	analyze.Run(extraction, &config)
 }
@@ -84,7 +85,7 @@ func tokensExtracted(extraction []parse.Extraction) bool {
 	return false
 }
 
-func getCommandLineArgs() (logPaths []string, configPath string, test bool, print bool) {
+func getCommandLineArgs() (logPaths []string, configPath string, test bool, print bool, parseLog bool) {
 	// Get log file paths from command-line arguments
 	logPaths = make([]string, 0)
 	for i := 1; i < len(os.Args); i++ {
@@ -101,11 +102,14 @@ func getCommandLineArgs() (logPaths []string, configPath string, test bool, prin
 		} else if arg == "-g" || arg == "--geoip" {
 			parse.GeoIPDBPath = os.Args[i+1]
 			continue
+		} else if arg == "-a" || arg == "--parse" {
+			parseLog = true
+			continue
 		} else if i > 1 && (os.Args[i-1] == "-c" || os.Args[i-1] == "--config") {
 			configPath = os.Args[i]
 			continue
 		}
 		logPaths = append(logPaths, arg)
 	}
-	return logPaths, configPath, test, print
+	return logPaths, configPath, test, print, parseLog
 }
