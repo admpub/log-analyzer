@@ -148,12 +148,12 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 		chartGeo,
 	)
 	var rows []duckdb.AnalyzeItem[int64]
-	rows, _ = kdb.TopCountWithUV(`path`, 10, true)
+	rows, _ = kdb.TopCountWithUV(`path`, 10, true, now.AddDate(0, 0, -days))
 	if err != nil {
 		return
 	}
 	table := tables.New()
-	table.SetCaptionContent(`热门页面`)
+	table.SetCaptionContent(`最近一周热门页面`)
 	table.Head.AddRow(new(tables.Row).AddCell(tables.NewCell(`路径`), tables.NewCell(`访问量`), tables.NewCell(`UV`)))
 	for _, row := range rows {
 		table.Body.AddRow(new(tables.Row).AddCell(tables.NewCell(row.Key), tables.NewCell(row.Value), tables.NewCell(row.UV)))
