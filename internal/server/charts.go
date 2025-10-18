@@ -1,6 +1,8 @@
 package server
 
 import (
+	"encoding/json"
+	"os"
 	"strconv"
 	"time"
 
@@ -17,14 +19,33 @@ func heatMapCalendar(kdb duckdb.Storager, isUV bool) (*charts.HeatMap, error) {
 	var err error
 	var title string
 	var titleEn string
+	var querier func() ([]duckdb.CountItem, error)
 	if isUV {
 		title = `访客量`
 		titleEn = `Visitors`
-		counts, err = kdb.DistinctCountByTime(`ip_address`, `%Y-%m-%d`, start, end)
+		querier = func() ([]duckdb.CountItem, error) {
+			return kdb.DistinctCountByTime(`ip_address`, `%Y-%m-%d`, start, end)
+		}
 	} else {
 		title = `访问量`
 		titleEn = `Visits`
-		counts, err = kdb.TotalByTime(`%Y-%m-%d`, start, end)
+		querier = func() ([]duckdb.CountItem, error) {
+			return kdb.TotalByTime(`%Y-%m-%d`, start, end)
+		}
+	}
+	cacheFile := `heatMapCalendar` + titleEn
+	var needQuery bool
+	if fi, err := os.Stat(cacheFile); err != nil || fi.ModTime().Before(time.Now().Add(-time.Hour)) {
+		needQuery = true
+	}
+	if needQuery {
+		counts, err = querier()
+		b, _ := json.Marshal(counts)
+		os.WriteFile(cacheFile, b, os.ModePerm)
+	} else {
+		if b, err := os.ReadFile(cacheFile); err == nil {
+			json.Unmarshal(b, &counts)
+		}
 	}
 	if err != nil {
 		return nil, err
