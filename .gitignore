@@ -5,3 +5,5 @@
 run.sh
 duck.db
 duck.db.*
+/cache
+*.cache

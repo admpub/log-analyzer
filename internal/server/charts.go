@@ -33,7 +33,7 @@ func heatMapCalendar(kdb duckdb.Storager, isUV bool) (*charts.HeatMap, error) {
 			return kdb.TotalByTime(`%Y-%m-%d`, start, end)
 		}
 	}
-	cacheFile := `heatMapCalendar` + titleEn
+	cacheFile := `heatMapCalendar` + titleEn + `.cache`
 	var needQuery bool
 	if fi, err := os.Stat(cacheFile); err != nil || fi.ModTime().Before(time.Now().Add(-time.Hour)) {
 		needQuery = true
