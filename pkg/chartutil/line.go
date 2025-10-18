@@ -10,6 +10,7 @@ import (
 func NewLine(w io.Writer, options []charts.GlobalOpts, headTitles []string, addSeries func(*charts.Line)) *charts.Line {
 	// create a new line instance
 	line := charts.NewLine()
+	options = append(options, Initialization(``, ``))
 	// set some global options like Title/Legend/ToolTip or anything else
 	line.SetGlobalOptions(options...)
 
@@ -29,13 +30,23 @@ func NewLine(w io.Writer, options []charts.GlobalOpts, headTitles []string, addS
 	return line
 }
 
-type LineDatasMap map[string][]opts.LineData
+func NewLineDatas() *LineDatasMap {
+	return &LineDatasMap{
+		m: map[string][]opts.LineData{},
+	}
+}
+
+type LineDatasMap struct {
+	m map[string][]opts.LineData
+	r []string
+}
 
 func (b *LineDatasMap) SetDatasMap(index int, key string, value interface{}, size int, options ...func(*opts.LineData)) {
-	datas, ok := (*b)[key]
+	datas, ok := b.m[key]
 	if !ok {
 		datas = make([]opts.LineData, size)
-		(*b)[key] = datas
+		b.m[key] = datas
+		b.r = append(b.r, key)
 	}
 	datas[index] = opts.LineData{
 		Name:  key,
@@ -47,7 +58,8 @@ func (b *LineDatasMap) SetDatasMap(index int, key string, value interface{}, siz
 }
 
 func (b LineDatasMap) AddSeries(bar *charts.Line) {
-	for key, val := range b {
+	for _, key := range b.r {
+		val := b.m[key]
 		bar.AddSeries(key, val)
 	}
 }

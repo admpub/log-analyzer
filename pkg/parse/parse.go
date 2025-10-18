@@ -358,8 +358,15 @@ func ParseText(logtext string, config *Config, storager ...storage.Storager) ([]
 	var i int
 	var unusedLines []string
 	parse := MakeParser(em, &unusedLines, config)
+	var err error
 	for _, line := range lines {
-		parse(i, line)
+		err = parse(i, line)
+		if err != nil {
+			if err == errBreak {
+				break
+			}
+			return nil, err
+		}
 		i++
 	}
 	if len(unusedLines) > 0 {
@@ -407,7 +414,13 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 		fmt.Println("")
 	}
 	for line := range ti.Lines {
-		parse(i, line.Text)
+		err = parse(i, line.Text)
+		if err != nil {
+			if err == errBreak {
+				break
+			}
+			return nil, err
+		}
 		i++
 		if config.ShowProgress {
 			toBytes += int64(len(line.Text) + 1)
@@ -425,7 +438,10 @@ func ParseFile(path string, config *Config, storager ...storage.Storager) ([]Ext
 	return em.List(config.LastLines)
 }
 
-func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) {
+var errContinue = errors.New(`continue`)
+var errBreak = errors.New(`break`)
+
+func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func(index int, line string) error {
 	var lastRank PatternRank
 	var recordedRank *PatternRank
 	useLast := config.useLastLine
@@ -439,7 +455,43 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 		}
 		return _unuseds
 	}
-	return func(index int, line string) {
+	var checkTimeRange func(r map[string]Param) error
+	if config.timeRange == nil {
+		checkTimeRange = func(_ map[string]Param) error {
+			return nil
+		}
+	} else {
+		if !config.timeRange.Start.IsZero() && !config.timeRange.End.IsZero() {
+			checkTimeRange = func(r map[string]Param) error {
+				if r[config.timeRange.Token].Type == `time` && r[config.timeRange.Token].Value.(time.Time).Before(config.timeRange.Start) {
+					return errContinue
+				}
+				if r[config.timeRange.Token].Type == `time` && r[config.timeRange.Token].Value.(time.Time).After(config.timeRange.End) {
+					return errBreak
+				}
+				return nil
+			}
+		} else if !config.timeRange.Start.IsZero() {
+			checkTimeRange = func(r map[string]Param) error {
+				if r[config.timeRange.Token].Type == `time` && r[config.timeRange.Token].Value.(time.Time).Before(config.timeRange.Start) {
+					return errContinue
+				}
+				return nil
+			}
+		} else if !config.timeRange.End.IsZero() {
+			checkTimeRange = func(r map[string]Param) error {
+				if r[config.timeRange.Token].Type == `time` && r[config.timeRange.Token].Value.(time.Time).After(config.timeRange.End) {
+					return errBreak
+				}
+				return nil
+			}
+		} else {
+			checkTimeRange = func(_ map[string]Param) error {
+				return nil
+			}
+		}
+	}
+	return func(index int, line string) error {
 		patternRank, patternUsed := parseLineSingle(line, config)
 		if patternUsed == "" {
 			if config.hasMultiple {
@@ -473,6 +525,13 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 					}
 				}
 				if len(patternUsed) > 0 {
+					err := checkTimeRange(patternRank.params)
+					if err != nil {
+						if err != errContinue {
+							return err
+						}
+						return nil
+					}
 					extra := Extraction{
 						Params:     recordedRank.params,
 						Pattern:    patternUsed,
@@ -495,6 +554,13 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 				log.Warnf("no pattern matched line %d: %q", index+1, line)
 			}
 		} else {
+			err := checkTimeRange(patternRank.params)
+			if err != nil {
+				if err != errContinue {
+					return err
+				}
+				return nil
+			}
 			lastRank = patternRank
 			extra := Extraction{
 				Params:     patternRank.params,
@@ -511,6 +577,7 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 				recordedRank = nil
 			}
 		}
+		return nil
 	}
 }
 

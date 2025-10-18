@@ -10,6 +10,8 @@ import (
 
 func NewMap(w io.Writer, options []charts.GlobalOpts, addSeries func(*charts.Map)) *charts.Map {
 	mp := charts.NewMap()
+	mp.RegisterMapType("china")
+	options = append(options, Initialization(``, ``))
 	mp.SetGlobalOptions(options...)
 	if addSeries != nil {
 		addSeries(mp)
@@ -22,6 +24,7 @@ func NewMap(w io.Writer, options []charts.GlobalOpts, addSeries func(*charts.Map
 
 func NewGeo(w io.Writer, options []charts.GlobalOpts, addSeries func(*charts.Geo)) *charts.Geo {
 	geo := charts.NewGeo()
+	options = append(options, Initialization(``, ``))
 	geo.SetGlobalOptions(options...)
 	if addSeries != nil {
 		addSeries(geo)

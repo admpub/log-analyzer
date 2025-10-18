@@ -9,6 +9,7 @@ import (
 
 func NewBar(w io.Writer, options []charts.GlobalOpts, headTitles []string, addSeries func(*charts.Bar)) *charts.Bar {
 	bar := charts.NewBar()
+	options = append(options, Initialization(``, ``))
 	// set some global options like Title/Legend/ToolTip or anything else
 	bar.SetGlobalOptions(options...)
 
@@ -27,13 +28,23 @@ func NewBar(w io.Writer, options []charts.GlobalOpts, headTitles []string, addSe
 	return bar
 }
 
-type BarDatasMap map[string][]opts.BarData
+func NewBarDatas() *BarDatasMap {
+	return &BarDatasMap{
+		m: map[string][]opts.BarData{},
+	}
+}
+
+type BarDatasMap struct {
+	m map[string][]opts.BarData
+	r []string
+}
 
 func (b *BarDatasMap) SetDatasMap(index int, key string, value interface{}, size int, options ...func(*opts.BarData)) {
-	datas, ok := (*b)[key]
+	datas, ok := b.m[key]
 	if !ok {
 		datas = make([]opts.BarData, size)
-		(*b)[key] = datas
+		b.m[key] = datas
+		b.r = append(b.r, key)
 	}
 	datas[index] = opts.BarData{
 		Name:  key,
@@ -45,7 +56,8 @@ func (b *BarDatasMap) SetDatasMap(index int, key string, value interface{}, size
 }
 
 func (b BarDatasMap) AddSeries(bar *charts.Bar) {
-	for key, val := range b {
+	for _, key := range b.r {
+		val := b.m[key]
 		if val[0].ItemStyle != nil {
 			bar.AddSeries(key, val, charts.WithItemStyleOpts(*val[0].ItemStyle))
 		} else {

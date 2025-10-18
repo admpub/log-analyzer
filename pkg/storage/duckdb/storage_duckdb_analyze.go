@@ -125,14 +125,14 @@ func makeTimeRangeCondition(timeKey string, startAndEndTime ...time.Time) string
 }
 
 func (e *storageDuckDB) TopCount(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
-	return e.topCount(key, limit, false, startAndEndTime...)
+	return e.topCount(key, limit, false, false, startAndEndTime...)
 }
 
-func (e *storageDuckDB) TopCountWithUV(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
-	return e.topCount(key, limit, true, startAndEndTime...)
+func (e *storageDuckDB) TopCountWithUV(key string, limit int, orderByUV bool, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
+	return e.topCount(key, limit, true, orderByUV, startAndEndTime...)
 }
 
-func (e *storageDuckDB) topCount(key string, limit int, withUV bool, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
+func (e *storageDuckDB) topCount(key string, limit int, withUV bool, orderByUV bool, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
 	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
@@ -145,7 +145,11 @@ func (e *storageDuckDB) topCount(key string, limit int, withUV bool, startAndEnd
 	if withUV {
 		selectField += `, COUNT(DISTINCT Params['ip_address']) AS uv`
 	}
-	r, err := e.db.Query(`SELECT ` + selectField + ` FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY COUNT(` + dbField + `) DESC LIMIT ` + strconv.Itoa(limit))
+	orderBy := `COUNT(` + dbField + `)`
+	if orderByUV {
+		orderBy = `COUNT(DISTINCT Params['ip_address'])`
+	}
+	r, err := e.db.Query(`SELECT ` + selectField + ` FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY ` + orderBy + ` DESC LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return nil, err
 	}

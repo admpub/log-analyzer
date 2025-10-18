@@ -14,7 +14,7 @@ type Storager interface {
 	TopInteger(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error)
 	TopFloat(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[float64], error)
 	TopCount(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error)
-	TopCountWithUV(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error)
+	TopCountWithUV(key string, limit int, orderByUV bool, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error)
 	DistinctCount(key string, startAndEndTime ...time.Time) (int64, error)
 	DistinctCountByTime(key string, timeFormat string, startAndEndTime ...time.Time) ([]CountItem, error)
 	Sum(key string, startAndEndTime ...time.Time) (int64, error)

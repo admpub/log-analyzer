@@ -6,8 +6,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/admpub/log"
 	"github.com/admpub/log-analyzer/pkg/storage"
+	"github.com/araddon/dateparse"
 )
 
 type Config struct {
@@ -18,11 +21,25 @@ type Config struct {
 	LastLines        int                   `json:"lastLines,omitempty"`
 	ShowProgress     bool                  `json:"showProgress,omitempty"`
 	StorageEngine    string                `json:"storageEngine,omitempty"`
+	TimeRange        *TimeStrRange         `json:"timeRange,omitempty"`
+	timeRange        *TimeRange
 	storager         storage.Storager
 	patternCount     []PatternCount
 	hasMultiple      bool
 	mutilinePatterns map[int]PartialPattern //{Patterns.index:[]string}
 	useLastLine      bool
+}
+
+type TimeStrRange struct {
+	Token string `json:"token,omitempty"`
+	Start string `json:"start,omitempty"`
+	End   string `json:"end,omitempty"`
+}
+
+type TimeRange struct {
+	Token string
+	Start time.Time
+	End   time.Time
 }
 
 type PartialPattern struct {
@@ -47,7 +64,7 @@ func (c *Config) Close() {
 	}
 }
 
-func (c *Config) SetDefaults() {
+func (c *Config) SetDefaults() error {
 	if len(c.StorageEngine) == 0 {
 		c.StorageEngine = `memory`
 	}
@@ -98,6 +115,25 @@ func (c *Config) SetDefaults() {
 			}
 		}
 	}
+	var err error
+	if c.TimeRange != nil && len(c.TimeRange.Token) > 0 && (len(c.TimeRange.Start) > 0 || len(c.TimeRange.End) > 0) {
+		c.timeRange = &TimeRange{
+			Token: c.TimeRange.Token,
+		}
+		if len(c.TimeRange.Start) > 0 {
+			c.timeRange.Start, err = dateparse.ParseAny(c.TimeRange.Start)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+		if len(c.TimeRange.End) > 0 {
+			c.timeRange.End, err = dateparse.ParseAny(c.TimeRange.End)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+	}
+	return err
 }
 
 type PatternCount struct {
@@ -123,10 +159,10 @@ func LoadConfig(path string) (Config, error) {
 	}
 
 	var config Config
-	if err := json.Unmarshal([]byte(byteValue), &config); err != nil {
+	if err = json.Unmarshal([]byte(byteValue), &config); err != nil {
 		fmt.Println(err)
 		return Config{}, err
 	}
-	config.SetDefaults()
-	return config, nil
+	err = config.SetDefaults()
+	return config, err
 }

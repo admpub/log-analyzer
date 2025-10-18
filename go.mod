@@ -1,6 +1,6 @@
 module github.com/admpub/log-analyzer
 
-go 1.24.0
+go 1.25.1
 
 require (
 	github.com/admpub/log v1.4.0
@@ -8,6 +8,7 @@ require (
 	github.com/admpub/tail v1.1.1
 	github.com/adrg/strutil v0.3.1
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
+	github.com/coscms/tables v0.0.0-20251010055243-090367bb44bd
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/render v1.0.3
 	github.com/go-echarts/go-echarts/v2 v2.6.3
@@ -16,16 +17,26 @@ require (
 	github.com/medama-io/go-useragent v1.2.2
 	github.com/oschwald/geoip2-golang v1.13.0
 	github.com/oschwald/maxminddb-golang v1.13.1
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/webx-top/com v1.4.0
 )
 
 require (
 	github.com/admpub/color v1.8.1 // indirect
+	github.com/admpub/dateparse v0.0.0-20250903020633-d86d3f2a4cfd // indirect
+	github.com/admpub/decimal v1.3.2 // indirect
+	github.com/admpub/events v1.3.6 // indirect
 	github.com/admpub/fsnotify v1.7.1 // indirect
+	github.com/admpub/go-isatty v0.0.11 // indirect
+	github.com/admpub/go-reuseport v0.5.0 // indirect
+	github.com/admpub/humanize v0.0.0-20190501023926-5f826e92c8ca // indirect
+	github.com/admpub/realip v0.2.7 // indirect
+	github.com/admpub/timeago v1.3.0 // indirect
+	github.com/admpub/xencoding v0.0.3 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/apache/arrow-go/v18 v18.4.1 // indirect
 	github.com/boyter/go-string v1.0.5 // indirect
+	github.com/coscms/forms v1.13.11 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/duckdb/duckdb-go-bindings v0.1.20 // indirect
 	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.20 // indirect
@@ -46,19 +57,28 @@ require (
 	github.com/marcboeker/go-duckdb/mapping v0.0.20 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
+	github.com/webx-top/captcha v0.1.0 // indirect
+	github.com/webx-top/codec v0.3.0 // indirect
+	github.com/webx-top/echo v1.22.4 // indirect
+	github.com/webx-top/pagination v0.3.2 // indirect
+	github.com/webx-top/poolx v0.0.0-20210912044716-5cfa2d58e380 // indirect
+	github.com/webx-top/tagfast v0.0.1 // indirect
+	github.com/webx-top/validation v0.0.3 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
 	golang.org/x/mod v0.28.0 // indirect
+	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/telemetry v0.0.0-20251001141935-4eae98a72453 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/tools v0.37.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
