@@ -165,9 +165,9 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 
 var bodyAndLastDiv = regexp.MustCompile(`</div>\s*</body>\s*</html>\s*$`)
 var tableStyle = `<style>
-table {border-collapse: collapse;background-color: #f2f2f2;width: 100%;margin: auto;box-shadow: 1px 1px 5px rgba(0,0,0,0.3);}
+table {border-collapse: collapse;background-color: #f2f2f2;width: 100%;margin: auto}
 table caption{color: #516b91; font-weight: bold}
-th, td {border: 1px solid #ccc;text-align: left;padding: 8px;}
+th, td {text-align: left;padding: 8px;}
 th {background-color: #516b91;color: white;}
 tr:nth-child(odd) {background-color: #f2f2f2;}
 tr:nth-child(even) {background-color: #fff;}
