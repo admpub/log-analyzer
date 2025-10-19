@@ -151,6 +151,7 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 	where := ``
 	//where = `Params['path'] NOT ILIKE '/public/%' AND Params['path'] NOT IN ('/robots.txt','/favicon.ico')`
 	//where = `Params['path'] ILIKE '/film/%'`
+	//where = `Params['status'] = '200'`
 	rows, _ = kdb.SetBaseWhere(where).TopCountWithUV(`path`, 10, true, now.AddDate(0, 0, -days))
 	if err != nil {
 		return
