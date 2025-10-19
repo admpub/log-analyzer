@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/admpub/log-analyzer/pkg/chartutil"
@@ -141,12 +142,18 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 
 	page := components.NewPage()
 	page.SetLayout(components.PageFlexLayout)
+	page.SetPageTitle(`网站日志分析图`)
+	page.AddCustomizedHeaders(tableStyle)
 	page.AddCharts(
 		chartHeatMapUV, chartHeatMapPV,
 		chartUV, chartVisits,
 		chartUV24Hours, chartVisits24Hours,
 		chartGeo,
 	)
+
+	var tablesHTML []string
+
+	// == 热门页面 ==
 	var rows []duckdb.AnalyzeItem[int64]
 	where := ``
 	//where = `Params['path'] NOT ILIKE '/public/%' AND Params['path'] NOT IN ('/robots.txt','/favicon.ico')`
@@ -162,21 +169,49 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 	for _, row := range rows {
 		table.Body.AddRow(new(tables.Row).AddCell(tables.NewCell(row.Key), tables.NewCell(row.Value), tables.NewCell(row.UV)))
 	}
+	tablesHTML = append(tablesHTML, string(table.Render()))
+	rows, _ = kdb.SetBaseWhere(where).TopCountWithUV(`path`, 10, true, now.AddDate(0, 0, -days))
+	if err != nil {
+		return
+	}
+
+	// == 热门IP ==
+	rows, _ = kdb.SetBaseWhere(where).TopCount(`ip_address`, 20, now.AddDate(0, 0, -days))
+	if err != nil {
+		return
+	}
+	table = tables.New()
+	table.SetCaptionContent(`最近一周热门IP`)
+	table.Head.AddRow(new(tables.Row).AddCell(tables.NewCell(`IP`), tables.NewCell(`归属地`), tables.NewCell(`访问量`)))
+	for _, row := range rows {
+		table.Body.AddRow(new(tables.Row).AddCell(tables.NewCell(row.Key), tables.NewCell(row.Extra[`location`]), tables.NewCell(row.Value)))
+	}
+	tablesHTML = append(tablesHTML, string(table.Render()))
+
+	// == 热门地区 ==
+	rows, _ = kdb.SetBaseWhere(where).TopCountWithUV(`location`, 20, false, now.AddDate(0, 0, -days))
+	if err != nil {
+		return
+	}
+	table = tables.New()
+	table.SetCaptionContent(`最近一周热门地区`)
+	table.Head.AddRow(new(tables.Row).AddCell(tables.NewCell(`地区`), tables.NewCell(`访问量`), tables.NewCell(`UV`)))
+	for _, row := range rows {
+		table.Body.AddRow(new(tables.Row).AddCell(tables.NewCell(row.Key), tables.NewCell(row.Value), tables.NewCell(row.UV)))
+	}
+	tablesHTML = append(tablesHTML, string(table.Render()))
+
+	for index, tblHTML := range tablesHTML {
+		tablesHTML[index] = `<div class="container"><div class="item" style="width:900px">` + tblHTML + `</div></div>`
+	}
 	buf := bytes.NewBuffer(nil)
 	page.Render(buf)
-	w.Write(bodyAndLastDiv.ReplaceAll(buf.Bytes(), []byte(tableStyle+`<div class="container"><div class="item" style="width:900px">`+string(table.Render())+`</div></div> </div></body></html>`)))
+	w.Write(bodyAndLastDiv.ReplaceAll(buf.Bytes(), []byte(strings.Join(tablesHTML, ``)+`</div></body></html>`)))
 }
 
 var bodyAndLastDiv = regexp.MustCompile(`</div>\s*</body>\s*</html>\s*$`)
-var tableStyle = `<style>
-table {border-collapse: collapse;background-color: #f2f2f2;width: 100%;margin: auto}
-table caption{color: #516b91; font-weight: bold}
-th, td {text-align: left;padding: 8px;}
-th {background-color: #516b91;color: white;}
-tr:nth-child(odd) {background-color: #f2f2f2;}
-tr:nth-child(even) {background-color: #fff;}
-@media screen and (max-width: 600px) {
-table {display: block;overflow-x: auto;}
-th, td {display: block;width: 100%;}
-}
+var tableStyle = `<style>.container{padding:1px}
+table {border-collapse: collapse;background-color: #f2f2f2;width: 100%;margin: auto}table caption{color: #516b91; font-weight: bold}
+th, td {text-align: left;padding: 8px;}th {background-color: #516b91;color: white;}tr:nth-child(odd) {background-color: #f2f2f2;}tr:nth-child(even) {background-color: #fff;}
+@media screen and (max-width: 600px) {table {display: block;overflow-x: auto;}th, td {display: block;width: 100%;}}
 </style>`
