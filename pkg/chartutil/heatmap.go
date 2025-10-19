@@ -62,10 +62,11 @@ func genHeatMapCalendarData(start time.Time, end time.Time, genValue func(time.T
 	var maxValue int64
 	for dt := start; dt.Before(end); dt = dt.AddDate(0, 0, 1) {
 		value := genValue(dt, DayEnd(dt))
+		timeDay := dt.Format(time.DateOnly)
 		if value <= 0 {
-			items = append(items, opts.HeatMapData{Value: [2]interface{}{dt.Format(time.DateOnly), "-"}})
+			items = append(items, opts.HeatMapData{Value: [2]interface{}{timeDay, "-"}, Name: timeDay})
 		} else {
-			items = append(items, opts.HeatMapData{Value: [2]interface{}{dt.Format(time.DateOnly), value}})
+			items = append(items, opts.HeatMapData{Value: [2]interface{}{timeDay, value}, Name: timeDay})
 		}
 		maxValue = max(maxValue, value)
 	}
