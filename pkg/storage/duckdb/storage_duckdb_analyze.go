@@ -26,6 +26,16 @@ type CountItem struct {
 	Extra map[string]any
 }
 
+type QueryClause struct {
+	Key       string
+	Limit     int
+	WithUV    bool
+	OrderByUV bool
+	StartTime time.Time
+	EndTime   time.Time
+	Where     string
+}
+
 func (c *CountItem) ParseTime(key string, format string) (time.Time, error) {
 	countTime, ok := c.Extra[key+`Raw`].(time.Time)
 	if !ok {
@@ -43,10 +53,11 @@ func (c *CountItem) ParseTime(key string, format string) (time.Time, error) {
 func (e *storageDuckDB) TopInteger(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
+	where = e.makeWhere(where)
 	r, err := e.db.Query(`SELECT ` + dbField + ` AS value, COUNT(` + dbField + `) AS num FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY TRY_CAST(` + dbField + ` AS BIGINT) DESC LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return nil, err
@@ -71,10 +82,11 @@ func (e *storageDuckDB) TopInteger(key string, limit int, startAndEndTime ...tim
 func (e *storageDuckDB) TopFloat(key string, limit int, startAndEndTime ...time.Time) ([]AnalyzeItem[float64], error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
+	where = e.makeWhere(where)
 	r, err := e.db.Query(`SELECT ` + dbField + ` AS value, COUNT(` + dbField + `) AS num FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY TRY_CAST(` + dbField + ` AS DOUBLE) DESC LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return nil, err
@@ -135,21 +147,22 @@ func (e *storageDuckDB) TopCountWithUV(key string, limit int, orderByUV bool, st
 func (e *storageDuckDB) topCount(key string, limit int, withUV bool, orderByUV bool, startAndEndTime ...time.Time) ([]AnalyzeItem[int64], error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
+	where = e.makeWhere(where)
 	selectField := dbField + ` AS value, COUNT(` + dbField + `) AS num`
 	selectField += `, ANY_VALUE(Params) AS Params`
-	//selectField += `, TRY_CAST(Params['longtitude'] AS DOUBLE) AS longitude, TRY_CAST(Params['latitude'] AS DOUBLE) AS latitude`
 	if withUV {
-		selectField += `, COUNT(DISTINCT Params['ip_address']) AS uv`
+		selectField += `, COUNT(DISTINCT Params['` + e.nameOfIPAddressField + `']) AS uv`
 	}
 	orderBy := `COUNT(` + dbField + `)`
 	if orderByUV {
-		orderBy = `COUNT(DISTINCT Params['ip_address'])`
+		orderBy = `COUNT(DISTINCT Params['` + e.nameOfIPAddressField + `'])`
 	}
-	r, err := e.db.Query(`SELECT ` + selectField + ` FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY ` + orderBy + ` DESC LIMIT ` + strconv.Itoa(limit))
+	sqlStr := `SELECT ` + selectField + ` FROM ` + tableName + where + ` GROUP BY ` + dbField + ` ORDER BY ` + orderBy + ` DESC LIMIT ` + strconv.Itoa(limit)
+	r, err := e.db.Query(sqlStr)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +171,6 @@ func (e *storageDuckDB) topCount(key string, limit int, withUV bool, orderByUV b
 	for r.Next() {
 		var value sql.NullString
 		var num sql.NullInt64
-		// var longitude sql.NullFloat64
-		// var latitude sql.NullFloat64
 		var params duckdb.Map
 		var mp AnalyzeItem[int64]
 		if withUV {
@@ -180,10 +191,7 @@ func (e *storageDuckDB) topCount(key string, limit int, withUV bool, orderByUV b
 		if err != nil {
 			return nil, err
 		}
-		mp.Extra = map[string]any{
-			// "longitude": longitude.Float64,
-			// "latitude":  latitude.Float64,
-		}
+		mp.Extra = map[string]any{}
 		for k, v := range params {
 			mp.Extra[k.(string)] = v
 		}
@@ -195,10 +203,11 @@ func (e *storageDuckDB) topCount(key string, limit int, withUV bool, orderByUV b
 func (e *storageDuckDB) DistinctCount(key string, startAndEndTime ...time.Time) (int64, error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
+	where = e.makeWhere(where)
 	r, err := e.db.Query(`SELECT COUNT(DISTINCT ` + dbField + `) AS num FROM ` + tableName + where)
 	if err != nil {
 		return 0, err
@@ -218,11 +227,12 @@ func (e *storageDuckDB) DistinctCount(key string, startAndEndTime ...time.Time) 
 func (e *storageDuckDB) DistinctCountByTime(key string, timeFormat string, startAndEndTime ...time.Time) ([]CountItem, error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
-	timeField := `STRPTIME(Params['timestamp'],'%Y-%m-%d %H:%M:%S %z %Z')`
+	where = e.makeWhere(where)
+	timeField := `STRPTIME(Params['` + e.nameOfTimestampField + `'],'%Y-%m-%d %H:%M:%S %z %Z')`
 	timeField = `CAST(` + timeField + ` AS TIMESTAMP)`
 	timeFormatField := `STRFTIME(` + timeField + `, '` + timeFormat + `')`
 	r, err := e.db.Query(`SELECT COUNT(DISTINCT ` + dbField + `) AS num,` + timeFormatField + ` AS tim FROM ` + tableName + where + ` GROUP BY ` + timeFormatField + ` ORDER BY tim ASC`)
@@ -260,11 +270,12 @@ func (e *storageDuckDB) DistinctCountByTime(key string, timeFormat string, start
 func (e *storageDuckDB) Sum(key string, startAndEndTime ...time.Time) (int64, error) {
 	safeKey := com.AddSlashes(key)
 	dbField := `Params['` + safeKey + `']`
-	timeWhere := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	timeWhere := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(timeWhere) > 0 {
 		timeWhere = ` AND ` + timeWhere
 	}
 	where := `TRY_CAST(` + dbField + ` AS BIGINT)>0 ` + timeWhere
+	where = e.makeWhere(where)
 	r, err := e.db.Query(`SELECT SUM(TRY_CAST(` + dbField + ` AS BIGINT)) AS num FROM ` + tableName + ` WHERE ` + where)
 	if err != nil {
 		return 0, err

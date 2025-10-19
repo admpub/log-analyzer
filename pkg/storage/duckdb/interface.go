@@ -18,4 +18,6 @@ type Storager interface {
 	DistinctCount(key string, startAndEndTime ...time.Time) (int64, error)
 	DistinctCountByTime(key string, timeFormat string, startAndEndTime ...time.Time) ([]CountItem, error)
 	Sum(key string, startAndEndTime ...time.Time) (int64, error)
+	Clone() Storager
+	SetBaseWhere(where string) Storager
 }

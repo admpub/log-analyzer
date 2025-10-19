@@ -66,12 +66,40 @@ Params     MAP(VARCHAR, ` + vt + `)
 		return nil, err
 	}
 	return &storageDuckDB{
-		db: db,
+		db:                   db,
+		nameOfTimestampField: `timestamp`,
+		nameOfIPAddressField: `ip_address`,
 	}, nil
 }
 
 type storageDuckDB struct {
-	db *sqlx.DB
+	db                   *sqlx.DB
+	nameOfTimestampField string
+	nameOfIPAddressField string
+	baseWhere            string
+}
+
+func (e *storageDuckDB) Clone() Storager {
+	return &storageDuckDB{
+		db:                   e.db,
+		nameOfTimestampField: e.nameOfTimestampField,
+		nameOfIPAddressField: e.nameOfIPAddressField,
+		baseWhere:            e.baseWhere,
+	}
+}
+
+func (e *storageDuckDB) SetNameOfTimestampField(name string) {
+	e.nameOfTimestampField = name
+}
+
+func (e *storageDuckDB) SetNameOfIPAddressField(name string) {
+	e.nameOfIPAddressField = name
+}
+
+func (e *storageDuckDB) SetBaseWhere(where string) Storager {
+	eCopy := e.Clone().(*storageDuckDB)
+	eCopy.baseWhere = where
+	return eCopy
 }
 
 func (e *storageDuckDB) Append(extra extraction.Extraction) error {
@@ -113,7 +141,11 @@ func (e *storageDuckDB) Update(extra extraction.Extraction) error {
 
 func (e *storageDuckDB) List(limit int) ([]extraction.Extraction, error) {
 	var list []extraction.Extraction
-	r, err := e.db.Query(`SELECT * FROM ` + tableName + ` LIMIT ` + strconv.Itoa(limit))
+	var where string
+	if len(e.baseWhere) > 0 {
+		where = ` WHERE ` + e.baseWhere
+	}
+	r, err := e.db.Query(`SELECT * FROM ` + tableName + where + ` LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return list, err
 	}
@@ -133,10 +165,14 @@ func (e *storageDuckDB) List(limit int) ([]extraction.Extraction, error) {
 
 func (e *storageDuckDB) ListMaps(limit int) ([]map[string]interface{}, error) {
 	var list []map[string]interface{}
+	var where string
+	if len(e.baseWhere) > 0 {
+		where = ` WHERE ` + e.baseWhere
+	}
 	var orderBy string
-	// timeField := `Params['unixtimestamp']`
+	// timeField := `Params['unix`+e.nameOfTimestampField+`']`
 	// orderBy = ` ORDER BY TRY_CAST(` + timeField + ` AS BIGINT) DESC`
-	r, err := e.db.Query(`SELECT * FROM ` + tableName + orderBy + ` LIMIT ` + strconv.Itoa(limit))
+	r, err := e.db.Query(`SELECT * FROM ` + tableName + where + orderBy + ` LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return list, err
 	}
@@ -160,6 +196,9 @@ func (e *storageDuckDB) ListMaps(limit int) ([]map[string]interface{}, error) {
 func (e *storageDuckDB) ListBy(args map[string]interface{}, limit int) ([]extraction.Extraction, error) {
 	var list []extraction.Extraction
 	where := make([]string, 0, len(args))
+	if len(e.baseWhere) > 0 {
+		where = append(where, e.baseWhere)
+	}
 	for key := range args {
 		field := strings.ReplaceAll(key, "`", "``")
 		where = append(where, "`"+field+"`=:"+key)
@@ -210,11 +249,23 @@ func (e *storageDuckDB) GetLastLines(n int) (unuseds []string) {
 	return
 }
 
+func (e *storageDuckDB) makeWhere(where string) string {
+	if len(e.baseWhere) > 0 {
+		if len(where) > 0 {
+			where += ` AND ` + e.baseWhere
+		} else {
+			where = ` WHERE ` + e.baseWhere
+		}
+	}
+	return where
+}
+
 func (e *storageDuckDB) Total(startAndEndTime ...time.Time) (int64, error) {
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
+	where = e.makeWhere(where)
 	r, err := e.db.Query(`SELECT COUNT(1) AS num FROM ` + tableName + where)
 	if err != nil {
 		return 0, err
@@ -242,11 +293,12 @@ var datetimeReplacer = strings.NewReplacer(
 )
 
 func (e *storageDuckDB) TotalByTime(timeFormat string, startAndEndTime ...time.Time) ([]CountItem, error) {
-	where := makeTimeRangeCondition(`timestamp`, startAndEndTime...)
+	where := makeTimeRangeCondition(e.nameOfTimestampField, startAndEndTime...)
 	if len(where) > 0 {
 		where = ` WHERE ` + where
 	}
-	timeField := `STRPTIME(Params['timestamp'],'%Y-%m-%d %H:%M:%S %z %Z')`
+	where = e.makeWhere(where)
+	timeField := `STRPTIME(Params['` + e.nameOfTimestampField + `'],'%Y-%m-%d %H:%M:%S %z %Z')`
 	timeField = `CAST(` + timeField + ` AS TIMESTAMP)`
 	timeFormatField := `STRFTIME(` + timeField + `, '` + timeFormat + `')`
 	r, err := e.db.Query(`SELECT COUNT(1) AS num,` + timeFormatField + ` AS tim FROM ` + tableName + where + ` GROUP BY ` + timeFormatField + ` ORDER BY tim ASC`)
