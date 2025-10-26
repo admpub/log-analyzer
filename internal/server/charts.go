@@ -28,7 +28,7 @@ func heatMapCalendar(kdb duckdb.Storager, isUV bool) (*charts.HeatMap, error) {
 		}
 	} else {
 		title = `访问量`
-		titleEn = `Visits`
+		titleEn = `Views`
 		querier = func() ([]duckdb.CountItem, error) {
 			return kdb.TotalByTime(`%Y-%m-%d`, start, end)
 		}
@@ -88,7 +88,7 @@ func daysBar(kdb duckdb.Storager, timeRanges []duckdb.TimeRange, historyItemStyl
 		counts, err = kdb.DistinctCountByTime(`ip_address`, `%Y-%m-%d`, timeRanges[0].StartTime.AddDate(0, 0, -days))
 	} else {
 		title = `访问量`
-		titleEn = `Visits`
+		titleEn = `Views`
 		counts, err = kdb.TotalByTime(`%Y-%m-%d`, timeRanges[0].StartTime.AddDate(0, 0, -days))
 	}
 	if err != nil {
@@ -133,7 +133,7 @@ func hoursBar(kdb duckdb.Storager, timeRanges []duckdb.TimeRange, historyItemSty
 		counts, err = kdb.DistinctCountByTime(`ip_address`, `%d %H`, timeRanges[0].StartTime.Add(-hoursDur))
 	} else {
 		title = timeTitle + `访问量`
-		titleEn = timeTitleEn + ` Visits`
+		titleEn = timeTitleEn + ` Views`
 		counts, err = kdb.TotalByTime(`%d %H`, timeRanges[0].StartTime.Add(-hoursDur))
 	}
 	if err != nil {

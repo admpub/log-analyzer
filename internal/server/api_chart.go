@@ -109,7 +109,7 @@ func handleChart(w http.ResponseWriter, r *http.Request, cfg *parse.Config, hist
 		maxValue = max(maxValue, item.Value)
 		geoDatasMap.SetDatasMap(index, item.Key, com.Float64(item.Extra[`longtitude`]), com.Float64(item.Extra[`latitude`]), float64(item.Value), size)
 	}
-	chartGeo := chartutil.NewGeo(nil, []charts.GlobalOpts{chartutil.Title(`Last week visits`, `最近一周访问量分布图`),
+	chartGeo := chartutil.NewGeo(nil, []charts.GlobalOpts{chartutil.Title(`Last week views`, `最近一周访问量分布图`),
 		charts.WithGeoComponentOpts(opts.GeoComponent{
 			Map: "world",
 			//ItemStyle: &opts.ItemStyle{Color: "#006666"},
