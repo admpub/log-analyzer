@@ -85,6 +85,12 @@ func (db *DB) Close() error {
 	return nil
 }
 
+// LookupCountry find IP
+func (db *DB) Lookup(ip net.IP, recv interface{}) error {
+	err := db.reader.Lookup(ip, recv)
+	return err
+}
+
 // LookupCountry find IP country code
 func (db *DB) LookupCountry(ip net.IP) (DBRecord, error) {
 	record := DBRecord{}
@@ -92,9 +98,5 @@ func (db *DB) LookupCountry(ip net.IP) (DBRecord, error) {
 	if err != nil {
 		return record, err
 	}
-	// m := map[string]interface{}{}
-	// db.reader.Lookup(ip, &m)
-	// b, _ := json.MarshalIndent(m, ``, `  `)
-	// println(string(b))
 	return record, nil
 }
