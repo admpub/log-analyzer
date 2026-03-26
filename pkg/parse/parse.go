@@ -139,26 +139,28 @@ func inferDataTypes(params map[string]string) map[string]Param {
 		typedParams[token] = extraction.MakeParam(token, match)
 	}
 	for token, param := range typedParams {
-		if param.Type == `time` {
+		if t, ok := param.Value.(time.Time); ok && param.Type == `time` {
 			typedParams[`unix`+token] = Param{
-				Value: param.Value.(time.Time).Unix(),
+				Value: t.Unix(),
 				Type:  "int",
 			}
 		}
 	}
 	if userAgent, ok := typedParams["user_agent"]; ok {
-		agent := ua.Parse(userAgent.Value.(string))
-		typedParams[`browser`] = Param{
-			Value: agent.Browser(),
-			Type:  "str",
-		}
-		typedParams[`os`] = Param{
-			Value: agent.OS(),
-			Type:  "str",
-		}
-		typedParams[`device`] = Param{
-			Value: agent.Device(),
-			Type:  "str",
+		if str, ok := userAgent.Value.(string); ok {
+			agent := ua.Parse(str)
+			typedParams[`browser`] = Param{
+				Value: agent.Browser(),
+				Type:  "str",
+			}
+			typedParams[`os`] = Param{
+				Value: agent.OS(),
+				Type:  "str",
+			}
+			typedParams[`device`] = Param{
+				Value: agent.Device(),
+				Type:  "str",
+			}
 		}
 	}
 	clientIP, ok := typedParams["ip_address"]
