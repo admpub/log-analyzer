@@ -1,10 +1,10 @@
 package geoip
 
 import (
-	"net"
+	"net/netip"
 
 	"github.com/admpub/log"
-	"github.com/oschwald/maxminddb-golang"
+	"github.com/oschwald/maxminddb-golang/v2"
 )
 
 type Names struct {
@@ -86,15 +86,15 @@ func (db *DB) Close() error {
 }
 
 // LookupCountry find IP
-func (db *DB) Lookup(ip net.IP, recv interface{}) error {
-	err := db.reader.Lookup(ip, recv)
+func (db *DB) Lookup(ip netip.Addr, recv interface{}) error {
+	err := db.reader.Lookup(ip).Decode(recv)
 	return err
 }
 
 // LookupCountry find IP country code
-func (db *DB) LookupCountry(ip net.IP) (DBRecord, error) {
+func (db *DB) LookupCountry(ip netip.Addr) (DBRecord, error) {
 	record := DBRecord{}
-	err := db.reader.Lookup(ip, &record)
+	err := db.reader.Lookup(ip).Decode(&record)
 	if err != nil {
 		return record, err
 	}

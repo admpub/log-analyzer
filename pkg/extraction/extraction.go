@@ -1,11 +1,12 @@
 package extraction
 
 import (
-	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
 	"github.com/araddon/dateparse"
+	"github.com/webx-top/com"
 )
 
 type Extraction struct {
@@ -43,7 +44,8 @@ func MakeParam(token, match string) Param {
 			return Param{Value: value, Type: "bool"}
 		}
 	case `ip`:
-		if value := net.ParseIP(match); value != nil {
+		host := com.SplitHost(match)
+		if value, err := netip.ParseAddr(host); err == nil {
 			return Param{Value: value, Type: "ip"}
 		}
 	case `str`:
@@ -52,7 +54,7 @@ func MakeParam(token, match string) Param {
 	// Attempt to parse as datetime
 	if value, err := dateparse.ParseAny(match); err == nil {
 		return Param{Value: value, Type: "time"}
-	} else if value := net.ParseIP(match); value != nil {
+	} else if value, err := netip.ParseAddr(com.SplitHost(match)); err == nil {
 		return Param{Value: value, Type: "ip"}
 	} else if value, err := strconv.ParseFloat(match, 64); strings.Contains(match, ".") && err == nil {
 		return Param{Value: value, Type: "float"}

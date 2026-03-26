@@ -1,16 +1,12 @@
 package location
 
 import (
-	"errors"
-	"net"
+	"net/netip"
 
-	"github.com/oschwald/geoip2-golang"
+	"github.com/oschwald/geoip2-golang/v2"
 )
 
-func GetCountryCode(ipAddress net.IP) (string, error) {
-	if ipAddress == nil {
-		return "", errors.New("invalid IP address")
-	}
+func GetCountryCode(ipAddress netip.Addr) (string, error) {
 	db, err := geoip2.Open("internal/location/GeoLite2-Country.mmdb")
 	if err != nil {
 		return "", err
@@ -21,6 +17,6 @@ func GetCountryCode(ipAddress net.IP) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	location := record.Country.Names["en"]
+	location := record.Country.Names.English
 	return location, nil
 }

@@ -1,7 +1,7 @@
 package analyze
 
 import (
-	"net"
+	"net/netip"
 
 	"github.com/admpub/log-analyzer/internal/location"
 	"github.com/admpub/log-analyzer/internal/server"
@@ -13,7 +13,7 @@ func ipLocations(extraction []parse.Extraction) map[string]string {
 	ipLocations := make(map[string]string)
 	for _, e := range extraction {
 		for _, p := range e.Params {
-			ipAddress, ok := p.Value.(net.IP)
+			ipAddress, ok := p.Value.(netip.Addr)
 			if !ok {
 				continue
 			}
@@ -26,7 +26,7 @@ func ipLocations(extraction []parse.Extraction) map[string]string {
 			if err != nil {
 				continue
 			}
-			ipLocations[ipAddress.String()] = loc
+			ipLocations[ipAddressStr] = loc
 		}
 	}
 	return ipLocations

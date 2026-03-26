@@ -68,7 +68,7 @@ func AsDuckMap(params map[string]extraction.Param) string {
 				q.WriteString(vv.Local().Format(time.DateTime))
 				q.WriteString(`'`)
 				q.WriteString(`)`)
-			case net.IP:
+			case netip.Addr:
 				q.WriteString(`union_value(str := `)
 				q.WriteString(`'`)
 				q.WriteString(vv.String())

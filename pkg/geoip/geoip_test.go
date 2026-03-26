@@ -1,7 +1,7 @@
 package geoip
 
 import (
-	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/admpub/pp"
@@ -9,11 +9,12 @@ import (
 )
 
 func TestLookup(t *testing.T) {
-	return
+	t.Skip()
 	dbFile := `/home/swh/下载/dbip-city-lite-2025-10.mmdb`
 	db, err := New(dbFile)
 	assert.NoError(t, err)
-	ip := net.ParseIP(`1.1.1.1`)
+	ip, err := netip.ParseAddr(`1.1.1.1`)
+	assert.NoError(t, err)
 	recv := map[string]interface{}{}
 	err = db.Lookup(ip, &recv)
 	assert.NoError(t, err)

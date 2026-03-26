@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"regexp"
 	"sort"
@@ -171,7 +171,7 @@ func inferDataTypes(params map[string]string) map[string]Param {
 		var longtitude, latitude float64
 		geoipdb := GeoIP()
 		if geoipdb != nil {
-			if ip, ok := clientIP.Value.(net.IP); ok && ip != nil {
+			if ip, ok := clientIP.Value.(netip.Addr); ok {
 				record, err := geoipdb.LookupCountry(ip)
 				if err != nil {
 					log.Warnf("unable to retrieve IP country code: %v", err)
