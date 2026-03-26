@@ -7,7 +7,7 @@
   // "lastLines": 50000,
   "timeRange": {
     "token": "timestamp",
-    "start": "2026-01-01 00:00:00"
+    "start": "2026-02-01 00:00:00"
   },
   "dependencies": {
     "path": ["status", "int_bytes"]
