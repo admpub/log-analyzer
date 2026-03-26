@@ -113,11 +113,12 @@ func (e *storageDuckDB) SetBaseWhere(where string) Storager {
 }
 
 func (e *storageDuckDB) Append(extra extraction.Extraction) error {
+	//panic(com.Dump(extra, false))
 	var err error
 	if e.saveLogLine {
 		_, err = e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, extra.Pattern, extra.LineNumber, extra.Line)
 	} else {
-		_, err = e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, ``, ``, ``)
+		_, err = e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, ``, 0, ``)
 	}
 	return err
 }

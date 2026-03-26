@@ -544,9 +544,12 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 						extra.LineNumber += 1
 					}
 					if useLast {
-						em.Update(extra)
+						err = em.Update(extra)
 					} else {
-						em.Append(extra)
+						err = em.Append(extra)
+					}
+					if err != nil {
+						return err
 					}
 					//dump(extra)
 					*unusedLines = (*unusedLines)[0:0]
@@ -570,7 +573,10 @@ func MakeParser(em storage.Storager, unusedLines *[]string, config *Config) func
 				LineNumber: index + 1,
 				Line:       line,
 			}
-			em.Append(extra)
+			err = em.Append(extra)
+			if err != nil {
+				return err
+			}
 			if config.hasMultiple && len(*unusedLines) > 0 {
 				for _index, _line := range *unusedLines {
 					log.Warnf("no pattern matched line %d: %q", index+1-len(*unusedLines)+_index, _line)
