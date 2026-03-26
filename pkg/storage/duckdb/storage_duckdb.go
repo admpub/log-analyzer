@@ -26,9 +26,11 @@ func init() {
 // duckdb://
 func newDuckDB(settings *url.URL) (storage.Storager, error) {
 	var storagePath string
+	var saveLogLine bool
 	if settings != nil {
 		var err error
 		storagePath = settings.Path
+		query := settings.Query()
 		if len(settings.Path) > 0 {
 			storagePath, err = url.PathUnescape(storagePath)
 			if err != nil {
@@ -36,7 +38,7 @@ func newDuckDB(settings *url.URL) (storage.Storager, error) {
 			}
 			storagePath = settings.Host + storagePath
 		} else {
-			storagePath = settings.Query().Get(`path`)
+			storagePath = query.Get(`path`)
 		}
 		if len(storagePath) > 0 {
 			switch storagePath[len(storagePath)-1] {
@@ -47,6 +49,12 @@ func newDuckDB(settings *url.URL) (storage.Storager, error) {
 				if com.IsDir(storagePath) {
 					storagePath = filepath.Join(storagePath, `duck.db`)
 				}
+			}
+		}
+		if v := query.Get(`saveLogLine`); len(v) > 0 {
+			saveLogLine, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -69,6 +77,7 @@ Params     MAP(VARCHAR, ` + vt + `)
 		db:                   db,
 		nameOfTimestampField: `timestamp`,
 		nameOfIPAddressField: `ip_address`,
+		saveLogLine:          saveLogLine,
 	}, nil
 }
 
@@ -77,6 +86,7 @@ type storageDuckDB struct {
 	nameOfTimestampField string
 	nameOfIPAddressField string
 	baseWhere            string
+	saveLogLine          bool
 }
 
 func (e *storageDuckDB) Clone() Storager {
@@ -103,7 +113,12 @@ func (e *storageDuckDB) SetBaseWhere(where string) Storager {
 }
 
 func (e *storageDuckDB) Append(extra extraction.Extraction) error {
-	_, err := e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, extra.Pattern, extra.LineNumber, extra.Line)
+	var err error
+	if e.saveLogLine {
+		_, err = e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, extra.Pattern, extra.LineNumber, extra.Line)
+	} else {
+		_, err = e.db.Exec(`INSERT INTO `+tableName+` VALUES(?, ?, ?, MAP`+AsDuckMap(extra.Params)+`)`, ``, ``, ``)
+	}
 	return err
 }
 
