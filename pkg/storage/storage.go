@@ -29,7 +29,7 @@ func Register(name string, function Constructor) {
 	storagers[name] = function
 }
 
-var ErrUnsupported = errors.New(`unsuppored storage`)
+var ErrUnsupported = errors.New(`unsupported storage`)
 
 func New(name string) (Storager, error) {
 	parts := strings.SplitN(name, `:`, 2)
