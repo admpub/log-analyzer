@@ -3,6 +3,7 @@ module github.com/admpub/log-analyzer
 go 1.25.1
 
 require (
+	github.com/admpub/json5 v0.0.1
 	github.com/admpub/log v1.5.2
 	github.com/admpub/pp v0.0.7
 	github.com/admpub/tail v1.1.1

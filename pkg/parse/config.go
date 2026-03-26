@@ -1,13 +1,13 @@
 package parse
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/admpub/json5"
 	"github.com/admpub/log"
 	"github.com/admpub/log-analyzer/pkg/storage"
 	"github.com/araddon/dateparse"
@@ -159,7 +159,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 
 	var config Config
-	if err = json.Unmarshal([]byte(byteValue), &config); err != nil {
+	if err = json5.Unmarshal([]byte(byteValue), &config); err != nil {
 		fmt.Println(err)
 		return Config{}, err
 	}
