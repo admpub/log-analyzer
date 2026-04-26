@@ -275,3 +275,7 @@ Nginx 日志 ──→ [convert] ──→ Parquet 文件 (分区存储)
                     ▼               ▼               ▼
                Web 仪表盘        REST API         自定义 SQL
 ```
+
+## 预览
+
+![仪表盘](./data/preview.jpg)
