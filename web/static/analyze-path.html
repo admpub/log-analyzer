@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路径深度分析 - Nginx 日志分析系统</title>
+    <script src="/static/js/echarts.min.js"></script>
+    <script src="/static/js/axios.min.js"></script>
+    <script src="/static/js/chart.umd.min.js"></script>
+    <script src="/static/js/luxon.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary-color: #1890ff;
+            --success-color: #52c41a;
+            --warning-color: #fa8c16;
+            --error-color: #f5222d;
+            --info-color: #1890ff;
+            --bg-body: #f0f2f5;
+            --bg-card: #ffffff;
+            --border-color: #d9d9d9;
+            --text-primary: #262626;
+            --text-secondary: #595959;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* 头部样式 */
+        .header {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* 路径信息 */
+        .path-info {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .path-input {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .path-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 16px;
+            font-family: monospace;
+        }
+        
+        .path-input input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        }
+        
+        .time-selector {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .time-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .time-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #40a9ff;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: white;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        /* 概览卡片 */
+        .overview-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .overview-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .overview-card h3 {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+        
+        .overview-value {
+            font-size: 28px;
+            font-weight: 600;
+        }
+        
+        /* 图表容器 */
+        .chart-section {
+            margin-bottom: 20px;
+        }
+        
+        .chart-section h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        .chart-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .chart-container h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .chart {
+            height: 300px;
+            width: 100%;
+        }
+        
+        /* 表格容器 */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .table-container h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        tbody tr:hover {
+            background: #fafafa;
+        }
+        
+        /* 建议卡片 */
+        .recommendations {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        
+        .recommendations h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .recommendation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .recommendation-item {
+            padding: 12px 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .recommendation-critical {
+            background: rgba(245, 34, 45, 0.1);
+            border-left: 4px solid var(--error-color);
+        }
+        
+        .recommendation-warning {
+            background: rgba(250, 140, 22, 0.1);
+            border-left: 4px solid var(--warning-color);
+        }
+        
+        .recommendation-info {
+            background: rgba(24, 144, 255, 0.1);
+            border-left: 4px solid var(--info-color);
+        }
+        
+        /* 加载状态 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+            
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .path-input {
+                flex-direction: column;
+            }
+            
+            .overview-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .table-container {
+                overflow-x: auto;
+            }
+            
+            table {
+                min-width: 800px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .overview-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 文本样式 */
+        .text-success { color: var(--success-color); }
+        .text-warning { color: var(--warning-color); }
+        .text-error { color: var(--error-color); }
+        .text-primary { color: var(--primary-color); }
+        
+        /* 标签样式 */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-success { background: rgba(82, 196, 26, 0.1); color: var(--success-color); }
+        .badge-warning { background: rgba(250, 140, 22, 0.1); color: var(--warning-color); }
+        .badge-error { background: rgba(245, 34, 45, 0.1); color: var(--error-color); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h1>🔍 <span data-i18n="analyze_page.title">路径深度分析</span></h1>
+                    <p data-i18n="analyze_page.subtitle">对特定路径进行深度性能分析和问题诊断</p>
+                </div>
+                <select id="langSwitch" onchange="i18n.setLanguage(this.value)" style="padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; cursor: pointer;">
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- 路径信息 -->
+        <div class="path-info">
+            <div class="path-input">
+                <input type="text" id="pathInput" data-i18n-placeholder="analyze_page.path_placeholder" placeholder="输入要分析的路径，例如: /api/user/profile" value="">
+                <button class="btn btn-primary" onclick="analyzePath()" data-i18n="analyze_page.start_analysis">开始分析</button>
+            </div>
+            
+            <div class="time-selector">
+                <button class="time-btn active" data-hours="24" onclick="setTimeRange(24)" data-i18n="analyze_page.time_24h">24小时</button>
+                <button class="time-btn" data-hours="72" onclick="setTimeRange(72)" data-i18n="analyze_page.time_3d">3天</button>
+                <button class="time-btn" data-hours="168" onclick="setTimeRange(168)" data-i18n="analyze_page.time_7d">7天</button>
+                <button class="time-btn" data-hours="720" onclick="setTimeRange(720)" data-i18n="analyze_page.time_30d">30天</button>
+            </div>
+        </div>
+        
+        <!-- 加载状态 -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p data-i18n="analyze_page.analyzing">正在深度分析中，请稍候...</p>
+        </div>
+        
+        <!-- 分析结果 -->
+        <div id="analysisResult" style="display: none;">
+            <!-- 概览卡片 -->
+            <div class="overview-cards">
+                <div class="overview-card">
+                    <h3 data-i18n="analyze_page.overview.avg_response_time">平均响应时间</h3>
+                    <div id="overviewAvgTime" class="overview-value">-</div>
+                </div>
+                <div class="overview-card">
+                    <h3 data-i18n="analyze_page.overview.p95_response_time">P95响应时间</h3>
+                    <div id="overviewP95Time" class="overview-value">-</div>
+                </div>
+                <div class="overview-card">
+                    <h3 data-i18n="analyze_page.overview.total_requests">总请求数</h3>
+                    <div id="overviewRequestCount" class="overview-value">-</div>
+                </div>
+                <div class="overview-card">
+                    <h3 data-i18n="analyze_page.overview.error_rate">错误率</h3>
+                    <div id="overviewErrorRate" class="overview-value">-</div>
+                </div>
+            </div>
+            
+            <!-- 优化建议 -->
+            <div class="recommendations" id="recommendationsSection">
+                <h3 data-i18n="analyze_page.recommendations">优化建议</h3>
+                <div class="recommendation-list" id="recommendationList"></div>
+            </div>
+            
+            <!-- 响应时间分析 -->
+            <div class="chart-section">
+                <h2 data-i18n="analyze_page.section_response_time">📈 响应时间分析</h2>
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_percentiles">响应时间分位数</h3>
+                        <div id="timePercentilesChart" class="chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_time_dist">响应时间分布</h3>
+                        <div id="timeDistributionChart" class="chart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 状态码分析 -->
+            <div class="chart-section">
+                <h2 data-i18n="analyze_page.section_status_code">🔢 状态码分析</h2>
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_status_dist">状态码分布</h3>
+                        <div id="statusChart" class="chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_status_time">状态码耗时</h3>
+                        <div id="statusTimeChart" class="chart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 时间趋势分析 -->
+            <div class="chart-section">
+                <h2 data-i18n="analyze_page.section_time_trend">⏰ 时间趋势分析</h2>
+                <div class="chart-container">
+                    <h3 data-i18n="analyze_page.chart_hourly_trend">小时级趋势</h3>
+                    <div id="hourlyTrendChart" class="chart"></div>
+                </div>
+            </div>
+            
+            <!-- 客户端分析 -->
+            <div class="chart-section">
+                <h2 data-i18n="analyze_page.section_client">👥 客户端分析</h2>
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_ua_dist">UserAgent分布</h3>
+                        <div id="userAgentChart" class="chart" style="height:700px"></div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_top_clients">Top客户端</h3>
+                        <table id="topClientsTable">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="table.ip_addr">IP地址</th>
+                                    <th data-i18n="table.requests">请求数</th>
+                                    <th data-i18n="table.avg_latency">平均耗时</th>
+                                    <th data-i18n="common.error">错误数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topClientsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 慢请求详情 -->
+            <div class="table-container">
+                <h3 data-i18n="analyze_page.slow_req_details">🐌 慢请求详情</h3>
+                <div style="overflow-x: auto;">
+                    <table id="slowRequestsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="slow_path_page.col_time">时间</th>
+                                <th data-i18n="slow_path_page.col_latency">耗时</th>
+                                <th data-i18n="slow_path_page.col_status_code">状态码</th>
+                                <th data-i18n="analyze_page.col_resp_size">响应大小</th>
+                                <th data-i18n="analyze_page.col_client_ip">客户端IP</th>
+                                <th data-i18n="analyze_page.col_user_agent">UserAgent</th>
+                            </tr>
+                        </thead>
+                        <tbody id="slowRequestsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 相关性分析 -->
+            <div class="chart-section">
+                <h2 data-i18n="analyze_page.section_correlation">🔗 相关性分析</h2>
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_corr_matrix">相关性矩阵</h3>
+                        <div id="correlationChart" class="chart"></div>
+                    </div>
+                    <div class="chart-container">
+                        <h3 data-i18n="analyze_page.chart_patterns">分析模式</h3>
+                        <div id="patternsList" style="margin-top: 20px;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 导出按钮 -->
+            <div style="text-align: center; margin: 40px 0;">
+                <button class="btn btn-primary" onclick="exportAnalysis()" data-i18n="analyze_page.export_report">
+                    📥 导出分析报告
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentAnalysis = null;
+        let currentPath = '';
+        let currentHours = 24;
+        let charts = {};
+        
+        // 页面加载完成
+        document.addEventListener('DOMContentLoaded', async function() {
+            await i18n.init('zh');
+            document.getElementById('langSwitch').value = i18n.getLang();
+
+            // 从URL获取路径参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const path = urlParams.get('path');
+            if (path) {
+                document.getElementById('pathInput').value = decodeURIComponent(path);
+                analyzePath();
+            }
+        });
+        
+        // 设置时间范围
+        function setTimeRange(hours) {
+            currentHours = hours;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.hours) === hours);
+            });
+            
+            if (currentPath) {
+                analyzePath();
+            }
+        }
+        
+        // 分析路径
+        async function analyzePath() {
+            const path = document.getElementById('pathInput').value.trim();
+            if (!path) {
+                alert(i18n.t('analyze_page.enter_path'));
+                return;
+            }
+            
+            currentPath = path;
+            showLoading(true);
+            document.getElementById('analysisResult').style.display = 'none';
+            
+            try {
+                const response = await axios.get('/api/stats/analyze-path', {
+                    params: {
+                        path: path,
+                        hours: currentHours
+                    }
+                });
+                
+                currentAnalysis = response.data.data;
+                showAnalysisResult();
+                
+            } catch (error) {
+                showError(i18n.t('analyze_page.analysis_failed', {msg: error.response?.data?.message || error.message}));
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // 显示分析结果
+        function showAnalysisResult() {
+            if (!currentAnalysis) return;
+            
+            // 更新概览卡片
+            document.getElementById('overviewAvgTime').innerHTML = formatTime(currentAnalysis.time_stats.avg_time);
+            document.getElementById('overviewP95Time').innerHTML = formatTime(currentAnalysis.time_stats.p95_time);
+            document.getElementById('overviewRequestCount').innerHTML = formatNumber(currentAnalysis.request_count);
+            
+            // 计算错误率
+            let errorRate = 0;
+            currentAnalysis.status_distribution?.forEach(s => {
+                if (s.status_code >= 400) {
+                    errorRate += s.percentage;
+                }
+            });
+            document.getElementById('overviewErrorRate').innerHTML = errorRate.toFixed(1) + '%';
+            
+            // 显示建议
+            showRecommendations();
+            
+            // 初始化图表
+            initCharts();
+            
+            // 渲染所有图表
+            renderTimeAnalysisCharts();
+            renderStatusAnalysisCharts();
+            renderHourlyTrendChart();
+            renderUserAgentChart();
+            renderTopClients();
+            renderSlowRequests();
+            renderCorrelationAnalysis();
+            
+            // 显示结果区域
+            document.getElementById('analysisResult').style.display = 'block';
+
+            window.dispatchEvent(new Event('resize'));
+        }
+        
+        // 显示建议
+        function showRecommendations() {
+            const list = document.getElementById('recommendationList');
+            list.innerHTML = '';
+            
+            if (!currentAnalysis.recommendations || currentAnalysis.recommendations.length === 0) {
+                list.innerHTML = '<div class="recommendation-item recommendation-info">' + i18n.t('analyze_page.rec_good') + '</div>';
+                return;
+            }
+            
+            currentAnalysis.recommendations.forEach(rec => {
+                const div = document.createElement('div');
+                
+                if (rec.includes('🚨')) {
+                    div.className = 'recommendation-item recommendation-critical';
+                } else if (rec.includes('⚠️')) {
+                    div.className = 'recommendation-item recommendation-warning';
+                } else {
+                    div.className = 'recommendation-item recommendation-info';
+                }
+                
+                div.innerHTML = rec;
+                list.appendChild(div);
+            });
+        }
+        
+        // 初始化图表
+        function initCharts() {
+            const chartIds = [
+                'timePercentilesChart',
+                'timeDistributionChart',
+                'statusChart',
+                'statusTimeChart',
+                'hourlyTrendChart',
+                'userAgentChart',
+                'correlationChart'
+            ];
+            
+            chartIds.forEach(id => {
+                charts[id] = echarts.init(document.getElementById(id));
+            });
+        }
+        
+        // 渲染响应时间分析图表
+        function renderTimeAnalysisCharts() {
+            const stats = currentAnalysis.time_stats;
+            
+            // 1. 响应时间分位数图表
+            const percentilesData = [
+                { name: i18n.t('analyze_page.percentile_min'), value: stats.min_time },
+                { name: 'P50', value: stats.p50_time },
+                { name: i18n.t('analyze_page.percentile_avg'), value: stats.avg_time },
+                { name: 'P90', value: stats.p90_time },
+                { name: 'P95', value: stats.p95_time },
+                { name: 'P99', value: stats.p99_time },
+                { name: i18n.t('analyze_page.percentile_max'), value: stats.max_time }
+            ];
+            
+            const percentilesOption = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: '{b}: {c}ms'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: percentilesData.map(p => p.name)
+                },
+                yAxis: {
+                    type: 'value',
+                    name: i18n.t('legend.response_time'),
+                    axisLabel: {
+                        formatter: '{value}ms'
+                    }
+                },
+                series: [{
+                    name: i18n.t('legend.response_time'),
+                    type: 'bar',
+                    data: percentilesData.map(p => ({
+                        value: p.value,
+                        itemStyle: {
+                            color: getTimeColor(p.value)
+                        }
+                    })),
+                    label: {
+                        show: true,
+                        position: 'top',
+                        formatter: '{c}ms'
+                    }
+                }]
+            };
+            
+            charts.timePercentilesChart.setOption(percentilesOption);
+            
+            // 2. 响应时间分布图表
+            const distributionData = [
+                { value: stats.slow_count, name: i18n.t('slow_path_page.slow_request_label') },
+                { value: currentAnalysis.request_count - stats.slow_count, name: i18n.t('common.normal') }
+            ];
+            
+            const distributionOption = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                series: [{
+                    name: i18n.t('chart.country_pie'),
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    data: distributionData,
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+            
+            charts.timeDistributionChart.setOption(distributionOption);
+        }
+        
+        // 渲染状态码分析图表
+        function renderStatusAnalysisCharts() {
+            const statusData = currentAnalysis.status_distribution;
+            
+            // 1. 状态码分布图表
+            const statusOption = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'vertical',
+                    right: 10,
+                    top: 20,
+                    bottom: 20
+                },
+                series: [{
+                    name: i18n.t('chart.status_dist'),
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    data: statusData ? statusData.map(s => ({
+                        name: `HTTP ${s.status_code}`,
+                        value: s.count,
+                        itemStyle: {
+                            color: getStatusColor(s.status_code)
+                        }
+                    })) : []
+                }]
+            };
+            
+            charts.statusChart.setOption(statusOption);
+            
+            // 2. 状态码耗时图表
+            const statusTimeOption = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        const data = statusData[params[0].dataIndex];
+                        return `
+                            <div>${i18n.t('analyze_page.tooltip_status_code')} HTTP ${data.status_code}</div>
+                            <div>${i18n.t('analyze_page.tooltip_avg_latency')} ${data.avg_time}ms</div>
+                            <div>${i18n.t('analyze_page.tooltip_request_count')} ${formatNumber(data.count)}</div>
+                            <div>${i18n.t('analyze_page.tooltip_percentage')} ${data.percentage}%</div>
+                        `;
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: statusData ? statusData.map(s => `HTTP ${s.status_code}`) : []
+                },
+                yAxis: [{
+                    type: 'value',
+                    name: i18n.t('legend.requests'),
+                    position: 'left'
+                }, {
+                    type: 'value',
+                    name: i18n.t('analyze_page.latency_unit'),
+                    position: 'right'
+                }],
+                series: [{
+                    name: i18n.t('legend.requests'),
+                    type: 'bar',
+                    yAxisIndex: 0,
+                    data: statusData ? statusData.map(s => s.count) : []
+                }, {
+                    name: i18n.t('table.avg_latency'),
+                    type: 'line',
+                    yAxisIndex: 1,
+                    data: statusData ? statusData.map(s => s.avg_time) : [],
+                    smooth: true
+                }]
+            };
+            
+            charts.statusTimeChart.setOption(statusTimeOption);
+        }
+        
+        // 渲染小时趋势图表
+        function renderHourlyTrendChart() {
+            const hourlyData = currentAnalysis.hourly_stats;
+            const hours = hourlyData ? hourlyData.map(h => new Date(h.hour).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })) : []; // 提取时分
+            const requests = hourlyData ? hourlyData.map(h => h.request_count) : [];
+            const avgTimes = hourlyData ? hourlyData.map(h => h.avg_time) : [];
+            const p95Times = hourlyData ? hourlyData.map(h => h.p95_time) : [];
+            const errors = hourlyData ? hourlyData.map(h => h.error_count) : [];
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' }
+                },
+                legend: {
+                    data: [i18n.t('legend.requests'), i18n.t('table.avg_latency'), i18n.t('table.p95_latency'), i18n.t('common.error')]
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: hours
+                },
+                yAxis: [{
+                    type: 'value',
+                    name: i18n.t('legend.requests'),
+                    position: 'left'
+                }, {
+                    type: 'value',
+                    name: i18n.t('analyze_page.latency_unit'),
+                    position: 'right'
+                }],
+                series: [{
+                    name: i18n.t('legend.requests'),
+                    type: 'line',
+                    yAxisIndex: 0,
+                    data: requests,
+                    smooth: true
+                }, {
+                    name: i18n.t('table.avg_latency'),
+                    type: 'line',
+                    yAxisIndex: 1,
+                    data: avgTimes,
+                    smooth: true
+                }, {
+                    name: i18n.t('table.p95_latency'),
+                    type: 'line',
+                    yAxisIndex: 1,
+                    data: p95Times,
+                    smooth: true
+                }, {
+                    name: i18n.t('common.error'),
+                    type: 'bar',
+                    yAxisIndex: 0,
+                    data: errors
+                }]
+            };
+            
+            charts.hourlyTrendChart.setOption(option);
+        }
+        
+        // 渲染UserAgent图表
+        function renderUserAgentChart() {
+            const uaData = currentAnalysis.user_agents;
+            
+            const categories = {};
+            uaData?.forEach(ua => {
+                if (!categories[ua.category]) {
+                    categories[ua.category] = 0;
+                }
+                categories[ua.category] += ua.count;
+            });
+            
+            const option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'vertical',
+                    right: 10,
+                    top: 20,
+                    bottom: 20
+                },
+                series: [{
+                    name: i18n.t('analyze_page.chart_ua_dist'),
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    data: Object.entries(categories).map(([name, value]) => ({
+                        name,
+                        value
+                    }))
+                }]
+            };
+            
+            charts.userAgentChart.setOption(option);
+        }
+        
+        // 渲染Top客户端
+        function renderTopClients() {
+            const clients = currentAnalysis.top_clients;
+            const tbody = document.getElementById('topClientsBody');
+            
+            tbody.innerHTML = clients ? clients.map(client => `
+                <tr>
+                    <td><code>${client.ip}</code></td>
+                    <td>${formatNumber(client.request_count)}</td>
+                    <td>
+                        <span class="${getTimeClass(client.avg_time)}">
+                            ${client.avg_time}ms
+                        </span>
+                    </td>
+                    <td>${formatNumber(client.error_count)}</td>
+                </tr>
+            `).join('') : '';
+        }
+        
+        // 渲染慢请求
+        function renderSlowRequests() {
+            const requests = currentAnalysis.slow_requests;
+            const tbody = document.getElementById('slowRequestsBody');
+            
+            if (!requests || requests.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                            ${i18n.t('analyze_page.no_slow_req')}
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = requests.map(req => {
+                const time = new Date(req.timestamp);
+                return `
+                    <tr>
+                        <td>${time.toLocaleString()}</td>
+                        <td>
+                            <span class="${getTimeClass(req.response_time)}">
+                                ${req.response_time}ms
+                            </span>
+                        </td>
+                        <td>
+                            <span class="${getStatusClass(req.status)}">
+                                ${req.status}
+                            </span>
+                        </td>
+                        <td>${formatBytes(req.size_kb * 1024)}</td>
+                        <td><code>${req.ip}</code></td>
+                        <td>${truncateText(req.user_agent || '', 30)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // 渲染相关性分析
+        function renderCorrelationAnalysis() {
+            const corr = currentAnalysis.correlation;
+            
+            // [FIX #1] 空值守卫：防止 corr 为 null/undefined 时崩溃
+            if (!corr) {
+                console.warn('renderCorrelationAnalysis: correlation data is empty');
+                const patternsDiv = document.getElementById('patternsList');
+                if (patternsDiv) patternsDiv.innerHTML = '';
+                return;
+            }
+            
+            // 相关性矩阵图表
+            const correlationData = [
+                [i18n.t('analyze_page.corr_metric'), i18n.t('analyze_page.corr_resp_size'), i18n.t('analyze_page.corr_status_code_label'), i18n.t('analyze_page.corr_time_period')],
+                [i18n.t('analyze_page.corr_resp_time_label'), corr.size_time_corr ?? 0, corr.status_time_corr ?? 0, corr.hour_time_corr ?? 0]
+            ];
+            
+            const option = {
+                tooltip: {
+                    position: 'top'
+                },
+                grid: {
+                    height: '50%',
+                    top: '10%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: [i18n.t('analyze_page.corr_resp_size'), i18n.t('analyze_page.corr_status_code_label'), i18n.t('analyze_page.corr_time_period')],
+                    splitArea: {
+                        show: true
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: [i18n.t('analyze_page.corr_resp_time_label')],
+                    splitArea: {
+                        show: true
+                    }
+                },
+                visualMap: {
+                    min: -1,
+                    max: 1,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '15%',
+                    inRange: {
+                        color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+                    }
+                },
+                series: [{
+                    name: i18n.t('analyze_page.corr_series_name'),
+                    type: 'heatmap',
+                    data: correlationData.slice(1).flatMap((row, i) => 
+                        row.slice(1).map((value, j) => [j, i, value])
+                    ),
+                    label: {
+                        show: true,
+                        // [FIX #2] 类型安全：防止非数值导致 toFixed 崩溃
+                        formatter: function(params) {
+                            const val = params.data[2];
+                            return (typeof val === 'number' && !isNaN(val)) ? val.toFixed(2) : 'N/A';
+                        }
+                    }
+                }]
+            };
+            // [FIX #3] 异常隔离：图表渲染失败不影响模式列表渲染
+            if (charts.correlationChart) {
+                try {
+                    charts.correlationChart.setOption(option);
+                } catch (e) {
+                    console.error('renderCorrelationAnalysis: failed to render correlation chart', e);
+                }
+            }
+            
+            // 分析模式
+            const patternsDiv = document.getElementById('patternsList');
+            patternsDiv.innerHTML = '';
+            
+            if (!corr.patterns || corr.patterns.length === 0) {
+                patternsDiv.innerHTML = '<div style="color: var(--text-secondary);">' + i18n.t('analyze_page.no_patterns') + '</div>';
+            } else {
+                corr.patterns.forEach(pattern => {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #f0f0f0;';
+                    div.textContent = pattern;
+                    patternsDiv.appendChild(div);
+                });
+            }
+        }
+        
+        // 导出分析报告
+        function exportAnalysis() {
+            if (!currentAnalysis) {
+                alert(i18n.t('analyze_page.analysis_first'));
+                return;
+            }
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `path-analysis-${currentPath.replace(/[^a-zA-Z0-9]/g, '_')}-${timestamp}.md`;
+            
+            const report = generateMarkdownReport();
+            downloadFile(report, filename, 'text/markdown');
+        }
+        
+        // 生成Markdown报告
+        function generateMarkdownReport() {
+            const analysis = currentAnalysis;
+            
+            let report = `# ${i18n.t('analyze_page.report_title').replace('# ', '')}\n\n`;
+            report += `## ${i18n.t('analyze_page.report_basic_info').replace('## ', '')}\n\n`;
+            report += `- **${i18n.t('analyze_page.report_path_label')}**: \`${analysis.path}\`\n`;
+            report += `- **${i18n.t('analyze_page.report_time_range_label')}**: ${analysis.time_range}\n`;
+            report += `- **${i18n.t('analyze_page.report_total_req_label')}**: ${formatNumber(analysis.request_count)}\n`;
+            report += `- **${i18n.t('analyze_page.report_analysis_time_label')}**: ${new Date().toLocaleString()}\n\n`;
+            
+            report += `## ${i18n.t('analyze_page.report_perf_overview').replace('## ', '')}\n\n`;
+            report += `| ${i18n.t('analyze_page.report_metric_label')} | ${i18n.t('analyze_page.report_value_label')} | ${i18n.t('analyze_page.report_status_label')} |\n`;
+            report += `|------|----|------|\n`;
+            report += `| ${i18n.t('analyze_page.report_avg_resp_time')} | ${analysis.time_stats.avg_time}ms | ${getTimeStatus(analysis.time_stats.avg_time)} |\n`;
+            report += `| ${i18n.t('analyze_page.report_p95_resp_time')} | ${analysis.time_stats.p95_time}ms | ${getTimeStatus(analysis.time_stats.p95_time)} |\n`;
+            report += `| ${i18n.t('analyze_page.report_slow_req_ratio')} | ${(analysis.time_stats.slow_count / analysis.request_count * 100).toFixed(1)}% | - |\n`;
+            
+            // 错误率
+            let errorRate = 0;
+            analysis.status_distribution.forEach(s => {
+                if (s.status_code >= 400) errorRate += s.percentage;
+            });
+            report += `| ${i18n.t('analyze_page.report_error_rate_label')} | ${errorRate.toFixed(1)}% | ${getErrorRateStatus(errorRate)} |\n\n`;
+            
+            report += `## ${i18n.t('analyze_page.report_recommendations_section').replace('## ', '')}\n\n`;
+            if (analysis.recommendations.length === 0) {
+                report += `${i18n.t('analyze_page.report_rec_good_text')}\n\n`;
+            } else {
+                analysis.recommendations.forEach(rec => {
+                    report += `- ${rec}\n`;
+                });
+                report += `\n`;
+            }
+            
+            report += `## ${i18n.t('analyze_page.report_detail_section').replace('## ', '')}\n\n`;
+            
+            // 响应时间分位数
+            report += `### ${i18n.t('analyze_page.report_percentiles_section').replace('### ', '')}\n\n`;
+            report += `| ${i18n.t('analyze_page.report_percentile_label')} | ${i18n.t('analyze_page.report_value_ms_label')} |\n`;
+            report += `|--------|--------|\n`;
+            report += `| ${i18n.t('analyze_page.percentile_min')} | ${analysis.time_stats.min_time} |\n`;
+            report += `| P50 | ${analysis.time_stats.p50_time} |\n`;
+            report += `| ${i18n.t('analyze_page.percentile_avg')} | ${analysis.time_stats.avg_time} |\n`;
+            report += `| P90 | ${analysis.time_stats.p90_time} |\n`;
+            report += `| P95 | ${analysis.time_stats.p95_time} |\n`;
+            report += `| P99 | ${analysis.time_stats.p99_time} |\n`;
+            report += `| ${i18n.t('analyze_page.percentile_max')} | ${analysis.time_stats.max_time} |\n\n`;
+            
+            // 状态码分布
+            report += `### ${i18n.t('analyze_page.report_status_dist_section').replace('### ', '')}\n\n`;
+            report += `| ${i18n.t('analyze_page.report_status_code_header')} | ${i18n.t('analyze_page.report_requests_header')} | ${i18n.t('analyze_page.report_percentage_header')} | ${i18n.t('analyze_page.report_avg_latency_ms_header')} |\n`;
+            report += `|--------|--------|------|--------------|\n`;
+            analysis.status_distribution.forEach(s => {
+                report += `| ${s.status_code} | ${formatNumber(s.count)} | ${s.percentage}% | ${s.avg_time} |\n`;
+            });
+            report += `\n`;
+            
+            // 客户端分析
+            if (analysis.top_clients.length > 0) {
+                report += `### ${i18n.t('analyze_page.report_top_clients_section').replace('### ', '')}\n\n`;
+                report += `| ${i18n.t('analyze_page.report_ip_addr_header')} | ${i18n.t('analyze_page.report_requests_header')} | ${i18n.t('analyze_page.report_avg_latency_ms_header')} | ${i18n.t('analyze_page.report_error_count_header')} |\n`;
+                report += `|--------|--------|--------------|--------|\n`;
+                analysis.top_clients.forEach(c => {
+                    report += `| ${c.ip} | ${formatNumber(c.request_count)} | ${c.avg_time} | ${c.error_count} |\n`;
+                });
+                report += `\n`;
+            }
+            
+            // 相关性分析
+            report += `### ${i18n.t('analyze_page.report_corr_section').replace('### ', '')}\n\n`;
+            report += `| ${i18n.t('analyze_page.report_corr_name_header')} | ${i18n.t('analyze_page.report_coefficient_header')} | ${i18n.t('analyze_page.report_desc_header')} |\n`;
+            report += `|--------|------|------|\n`;
+            report += `| ${i18n.t('analyze_page.corr_resp_time_label')}${i18n.t('analyze_page.report_vs')}${i18n.t('analyze_page.corr_resp_size')} | ${analysis.correlation?.size_time_corr?.toFixed(3)} | ${getCorrelationDescription(analysis.correlation?.size_time_corr)} |\n`;
+            report += `| ${i18n.t('analyze_page.corr_resp_time_label')}${i18n.t('analyze_page.report_vs')}${i18n.t('analyze_page.corr_status_code_label')} | ${analysis.correlation?.status_time_corr?.toFixed(3)} | ${getCorrelationDescription(analysis.correlation?.status_time_corr)} |\n`;
+            report += `| ${i18n.t('analyze_page.corr_resp_time_label')}${i18n.t('analyze_page.report_vs')}${i18n.t('analyze_page.corr_time_period')} | ${analysis.correlation?.hour_time_corr?.toFixed(3)} | ${getCorrelationDescription(analysis.correlation?.hour_time_corr)} |\n\n`;
+            
+            if (analysis.correlation && analysis.correlation.patterns && analysis.correlation.patterns.length > 0) {
+                report += `${i18n.t('analyze_page.report_patterns_detected')}\n`;
+                analysis.correlation.patterns.forEach(p => {
+                    report += `- ${p}\n`;
+                });
+                report += `\n`;
+            }
+            
+            // 慢请求详情
+            if (analysis.slow_requests && analysis.slow_requests.length > 0) {
+                report += `### ${i18n.t('analyze_page.report_slow_req_section').replace('### ', '')}\n\n`;
+                report += `| ${i18n.t('analyze_page.report_time_header')} | ${i18n.t('analyze_page.report_latency_ms_header')} | ${i18n.t('analyze_page.report_status_code_col')} | ${i18n.t('analyze_page.report_resp_size_header')} | ${i18n.t('analyze_page.report_client_ip_header')} |\n`;
+                report += `|------|----------|--------|----------|----------|\n`;
+                analysis.slow_requests.slice(0, 10).forEach(r => {
+                    const time = new Date(r.timestamp);
+                    report += `| ${time.toLocaleString()} | ${r.response_time} | ${r.status} | ${formatBytes(r.size_kb * 1024)} | ${r.ip} |\n`;
+                });
+                report += `\n`;
+            }
+            
+            report += `---\n`;
+            report += `${i18n.t('analyze_page.report_generated_at')} ${new Date().toLocaleString()}*\n`;
+            
+            return report;
+        }
+        
+        // 辅助函数
+        function formatTime(ms) {
+            const color = getTimeClass(ms);
+            return `<span class="${color}">${ms.toFixed(0)}<span style="font-size: 14px; color: var(--text-secondary);">ms</span></span>`;
+        }
+        
+        function getTimeClass(ms) {
+            if (ms <= 100) return 'text-success';
+            if (ms <= 500) return 'text-warning';
+            return 'text-error';
+        }
+        
+        function getTimeColor(ms) {
+            if (ms <= 100) return '#52c41a';
+            if (ms <= 500) return '#fa8c16';
+            return '#f5222d';
+        }
+        
+        function getStatusClass(status) {
+            if (status < 300) return 'text-success';
+            if (status < 400) return 'text-primary';
+            if (status < 500) return 'text-warning';
+            return 'text-error';
+        }
+        
+        function getStatusColor(status) {
+            if (status < 300) return '#52c41a';
+            if (status < 400) return '#1890ff';
+            if (status < 500) return '#fa8c16';
+            return '#f5222d';
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+        
+        function formatBytes(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let value = bytes;
+            let unitIndex = 0;
+            
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex++;
+            }
+            
+            return value.toFixed(1) + ' ' + units[unitIndex];
+        }
+        
+        function truncateText(text, maxLength) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+        
+        function getTimeStatus(ms) {
+            if (ms <= 100) return i18n.t('status_text.excellent');
+            if (ms <= 200) return i18n.t('status_text.good');
+            if (ms <= 500) return i18n.t('status_text.fair');
+            if (ms <= 1000) return i18n.t('status_text.poor');
+            return i18n.t('status_text.critical');
+        }
+        
+        function getErrorRateStatus(rate) {
+            if (rate <= 1) return i18n.t('status_text.excellent');
+            if (rate <= 5) return i18n.t('status_text.good');
+            if (rate <= 10) return i18n.t('status_text.fair');
+            return i18n.t('status_text.poor');
+        }
+
+        function getCorrelationDescription(corr) {
+            const absCorr = Math.abs(corr);
+            if (absCorr < 0.1) return i18n.t('corr_text.none');
+            if (absCorr < 0.3) return i18n.t('corr_text.weak');
+            if (absCorr < 0.5) return i18n.t('corr_text.moderate');
+            if (absCorr < 0.7) return i18n.t('corr_text.strong');
+            return i18n.t('corr_text.very_strong');
+        }
+        
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob(['\uFEFF' + content], { type: mimeType });
+            const link = document.createElement('a');
+            
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+        
+        function showError(message) {
+            alert(message);
+        }
+        
+        // 窗口大小变化时重绘图表
+        window.addEventListener('resize', function() {
+            Object.values(charts).forEach(chart => chart.resize());
+        });
+    </script>
+</body>
+</html>

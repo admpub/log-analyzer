@@ -1,0 +1,18 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+analyzer:
+  log_table: "nginx_logs"
+  log_directory: "./data/logs" # 日志文件目录 ./data/logs/partition
+  geoip_db_path: "/home/swh/下载/GeoLite2-City.mmdb"          # GeoIP数据库路径（如：./data/GeoLite2-City.mmdb），留空则不解析地理位置
+  refresh_interval: "5m"      # 数据刷新间隔
+  cache_ttl: "1m"            # 缓存TTL
+  max_connections: 20        # 数据库最大连接数
+  query_timeout: "30s"       # 查询超时时间
+
+log:
+  level: "info"              # debug, info, warn, error
+  file_path: "./mylog/app.log"
+  max_size: 100              # MB
+  max_age: 7                 # days

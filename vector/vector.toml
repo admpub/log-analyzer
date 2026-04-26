@@ -1,0 +1,92 @@
+# Vector 配置文件
+data_dir = "/var/lib/vector"
+
+[sources.nginx_access]
+type = "file"
+include = ["/var/log/nginx/access.log", "/var/log/nginx/access.log.*"]
+ignore_older_secs = 86400
+read_from = "beginning"
+
+[transforms.nginx_parser]
+type = "remap"
+inputs = ["nginx_access"]
+source = '''
+# 解析 JSON 日志
+. = parse_json!(.message)
+del(.message)
+
+.country = ""
+.city = ""
+
+# 解析时间戳
+.timestamp = parse_timestamp!(.time_local, "%d/%b/%Y:%H:%M:%S %z")
+
+# 解析请求信息
+if exists(.request) {
+  parts = split!(.request, " ")
+  if length(parts) >= 3 {
+    .method = parts[0]
+    .path = parts[1]
+    .protocol = parts[2]
+    
+    # 提取路径和查询参数
+    path_parts = split!(.path, "?")
+    .path = path_parts[0]
+    if length(path_parts) > 1 {
+      .query_string = path_parts[1]
+    }
+  }
+}
+
+# 添加时间分区字段
+.year = format_timestamp!(.timestamp, "%Y")
+.month = format_timestamp!(.timestamp, "%m")
+.day = format_timestamp!(.timestamp, "%d")
+.hour = format_timestamp!(.timestamp, "%H")
+
+# 清理字段
+.status = to_int!(.status)
+.body_bytes_sent = to_int!(.body_bytes_sent)
+.request_time = to_float!(.request_time)
+
+# 处理缺失字段
+.http_user_agent = get(.http_user_agent, default: "")
+.http_referer = get(.http_referer, default: "")
+'''
+
+# 定义 GeoIP 查询表
+[enrichment_tables.geoip]
+type = "geoip"
+path = "/etc/vector/geoip/GeoLite2-City.mmdb"
+
+[transforms.add_geoip_vrl]
+type = "remap"
+inputs = ["nginx_parser"]
+source = '''
+  # 使用 enrichment_tables 查询
+  if exists(.remote_addr) {
+    .geoip = get_enrichment_table_record!("geoip", { "ip": .remote_addr })
+    .country = get(.geoip.country.names.en, default: .geoip.registered_country.names.en)
+    .city = get(.geoip.city.names.en, default: "")
+    # 只保留国家代码，丢弃其他详细位置信息以节省空间
+    del(.geoip)
+  }
+'''
+
+
+[sinks.parquet_sink]
+type = "file"
+inputs = ["nginx_parser"]
+# inputs = ["add_geoip_vrl"]
+path = "/data/logs/nginx/year={{ year }}/month={{ month }}/day={{ day }}/hour={{ hour }}/access-{{ timestamp }}.parquet"
+encoding.codec = "parquet"
+batch.max_bytes = 10485760
+batch.timeout_secs = 300
+compression = "snappy"
+
+# 可选：同时输出到控制台用于调试
+[sinks.console]
+type = "console"
+inputs = ["nginx_parser"]
+target = "stdout"
+encoding.codec = "json"

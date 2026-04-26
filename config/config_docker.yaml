@@ -1,0 +1,17 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+analyzer:
+  log_table: "nginx_logs"
+  log_directory: "/data/logs/nginx"
+  refresh_interval: "5m"      # 数据刷新间隔
+  cache_ttl: "1m"            # 缓存TTL
+  max_connections: 20        # 数据库最大连接数
+  query_timeout: "30s"       # 查询超时时间
+
+log:
+  level: "info"              # debug, info, warn, error
+  file_path: "/var/log/log-analyzer/app.log"
+  max_size: 100              # MB
+  max_age: 7                 # days

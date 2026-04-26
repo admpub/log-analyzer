@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  nginx-log-analyzer:
+    build: .
+    container_name: log-analyzer
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/logs:/data/logs
+      - ./config:/app/config
+      - ./logs:/var/log/log-analyzer
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  vector:
+    image: timberio/vector:0.35-alpine
+    container_name: vector-log-collector
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml
+      - ./data/logs:/data/logs
+      - /var/log/nginx:/var/log/nginx:ro
+    depends_on:
+      - log-analyzer
+    command: ["--config", "/etc/vector/vector.toml"]
+    restart: unless-stopped

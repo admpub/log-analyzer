@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="common.title">Nginx 访问日志分析系统</title>
+    <script src="/static/js/echarts.min.js"></script>
+    <script src="/static/js/axios.min.js"></script>
+    <script src="/static/js/i18n.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .stat-card h3 { font-size: 14px; color: #666; margin-bottom: 10px; }
+        .stat-card .value { font-size: 28px; font-weight: bold; color: #333; }
+        .stat-card .change { font-size: 12px; margin-top: 5px; }
+        .chart-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .chart-container h3 { margin-bottom: 20px; color: #333; }
+        .chart { height: 300px; }
+        .chart-lg { height: 400px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        tr:hover { background: #f8f9fa; }
+        .btn { padding: 8px 16px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
+        .btn:hover { background: #40a9ff; }
+        a.btn{ text-decoration: none; }
+        .pull-right { float: right; }
+        .loading { display: none; text-align: center; padding: 20px; }
+        .loading.active { display: block; }
+        .error { color: #f5222d; background: #fff1f0; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .status-2xx { color: #52c41a; }
+        .status-3xx { color: #1890ff; }
+        .status-4xx { color: #fa8c16; }
+        .status-5xx { color: #f5222d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>📊 <span data-i18n="common.title">Nginx 访问日志分析</span></h1>
+                <p data-i18n="common.subtitle">基于 DuckDB + Parquet 的实时日志分析系统</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <select id="langSwitch" onchange="i18n.setLanguage(this.value)" style="padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; cursor: pointer;">
+                    <option value="zh">中文</option>
+                    <option value="en">English</option>
+                </select>
+                <button class="btn" onclick="refreshData()" data-i18n="common.refresh">🔄 刷新数据</button>
+                <button class="btn" onclick="showQueryModal()" data-i18n="common.query">🔍 自定义查询</button>
+            </div>
+        </div>
+        
+        <!-- 实时统计 -->
+        <h3 data-i18n="stats.last_1h">最近1小时</h3>
+        <div class="stats-grid" id="realtimeStats">
+
+        </div>
+        <h3 data-i18n="stats.last_24h">最近24小时</h3>
+        <div class="stats-grid" id="last24HoursStats"></div>
+        
+        <!-- 图表区域 -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="chart-container">
+                <h3 data-i18n="chart.status_dist">请求状态码分布 (最近24小时)</h3>
+                <div id="statusChart" class="chart"></div>
+            </div>
+            <div class="chart-container">
+                <h3 data-i18n="chart.hourly_trend">小时级请求趋势</h3>
+                <div id="hourlyChart" class="chart"></div>
+            </div>
+        </div>
+
+        <!-- 国家统计 -->
+        <div class="chart-container" style="margin-bottom: 20px;">
+            <h3 data-i18n="chart.country_map">访问来源国家分布 (最近24小时)</h3>
+            <div id="countryMapChart" style="height: 400px;"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="chart-container">
+                <h3 data-i18n="chart.country_top15">热门访问国家 TOP 15</h3>
+                <div style="overflow-x: auto;">
+                    <table id="topCountriesTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="table.country">国家</th>
+                                <th data-i18n="table.requests">请求数</th>
+                                <th data-i18n="table.unique_ip">独立IP</th>
+                                <th data-i18n="table.percentage">占比</th>
+                                <th data-i18n="table.error_rate_col">错误率</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h3 data-i18n="chart.country_pie">国家占比分布</h3>
+                <div id="countryChart" class="chart" style="height:700px"></div>
+            </div>
+        </div>
+
+        <!-- UV统计 -->
+        <h3 data-i18n="chart.uv_analysis" style="margin-top: 10px;">UV 独立访客分析 (最近7天)</h3>
+        <div class="stats-grid" id="uvSummaryCards" style="margin-bottom: 20px;"></div>
+        
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="chart-container">
+                <h3 data-i18n="chart.uv_pv_trend">UV/PV 趋势 (最近7天)</h3>
+                <div id="uvTrendChart" class="chart"></div>
+            </div>
+            <div class="chart-container">
+                <h3 data-i18n="chart.uv_hourly">各时段 UV 分布</h3>
+                <div id="uvHourChart" class="chart"></div>
+            </div>
+        </div>
+        
+        <!-- 表格区域 -->
+        <div style="display: grid; gap: 20px;">
+            <div class="chart-container">
+                <h3 data-i18n="chart.top_paths">热门访问路径 (最近24小时)</h3>
+                <div style="overflow-x: auto;">
+                    <table id="topPathsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="table.path">路径</th>
+                                <th data-i18n="table.requests">请求数</th>
+                                <th data-i18n="table.unique_ip">独立IP</th>
+                                <th data-i18n="table.error_rate_col">错误率</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <a href="/slow-paths.html" class="btn btn-secondary pull-right" target="_blank">🐌 <span data-i18n="slow_path_page.title">慢路径分析</span></a>
+                <h3 data-i18n="chart.slow_paths">长耗时访问路径 (最近24小时)</h3>
+                <div style="overflow-x: auto;">
+                    <table id="slowPathsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="table.path">路径</th>
+                                <th data-i18n="table.requests">请求数</th>
+                                <th data-i18n="table.p95_latency">P95耗时</th>
+                                <th data-i18n="table.p99_latency">P99耗时</th>
+                                <th data-i18n="table.max_latency">最大耗时</th>
+                                <th data-i18n="table.avg_latency">平均耗时</th>
+                                <th data-i18n="table.avg_size">平均大小</th>
+                                <th data-i18n="table.success_rate">成功率</th>
+                            </tr>
+                        </thead> 
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="chart-container">
+                <h3 data-i18n="chart.top_ips">热门访问IP (最近24小时)</h3>
+                <div style="overflow-x: auto;">
+                    <table id="topIPsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="table.ip">IP</th>
+                                <th data-i18n="table.requests">请求数</th>
+                                <th data-i18n="table.url_count">网址数量</th>
+                                <th data-i18n="table.error_rate_col">错误率</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h3 data-i18n="chart.suspicious_ips">可疑IP列表 (最近1小时)</h3>
+                <div style="overflow-x: auto;">
+                    <table id="suspiciousIPsTable">
+                        <thead>
+                            <tr>
+                                <th data-i18n="table.ip_addr">IP地址</th>
+                                <th data-i18n="table.requests">请求数</th>
+                                <th data-i18n="table.req_freq">请求频率</th>
+                                <th data-i18n="table.status">状态</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 加载状态 -->
+        <div class="loading" id="loading" data-i18n="common.loading">加载中...</div>
+        
+        <!-- 自定义查询模态框 -->
+        <div id="queryModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+            <div style="background: white; width: 600px; margin: 100px auto; padding: 20px; border-radius: 8px;">
+                <h3 data-i18n="custom_query.title">自定义查询</h3>
+                <textarea id="sqlQuery" style="width: 100%; height: 150px; font-family: monospace; margin: 10px 0;"
+                    data-i18n-placeholder="custom_query.placeholder" placeholder="输入SQL查询语句，例如：SELECT ip, COUNT(*) as cnt FROM nginx_logs GROUP BY ip ORDER BY cnt DESC LIMIT 10"></textarea>
+                <div data-i18n="custom_query.hint">输入SQL查询语句，例如：SELECT ip, COUNT(*) as cnt FROM nginx_logs GROUP BY ip ORDER BY cnt DESC LIMIT 10</div>
+                <div style="text-align: right; margin-top: 20px;">
+                    <button class="btn" onclick="executeCustomQuery()" data-i18n="common.execute">执行查询</button>
+                    <button class="btn" onclick="hideQueryModal()" style="background: #666; margin-left: 10px;" data-i18n="common.cancel">取消</button>
+                </div>
+                <div id="queryResult" style="margin-top: 20px; max-height: 300px; overflow: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let statusChart, hourlyChart, countryChart, countryMapChart, uvTrendChart, uvHourChart;
+        let refreshInterval;
+        let worldMapRegistered = false;
+
+        // 初始化
+        async function init() {
+            await i18n.init('zh');
+            document.getElementById('langSwitch').value = i18n.getLang();
+
+            i18n.onChange(() => {
+                loadRealtimeStats();
+                loadLast24HoursStats();
+                loadStatusChart();
+                loadHourlyChart();
+                loadCountryStats();
+                loadUVStats();
+            });
+
+            try {
+                const response = await fetch('/static/data/world.json');
+                if (response.ok) {
+                    const worldJson = await response.json();
+                    echarts.registerMap('world', worldJson);
+                    worldMapRegistered = true;
+                }
+            } catch (e) {
+                console.warn('Failed to load world map data, map chart will not be available:', e);
+            }
+
+            initCharts();
+            await Promise.all([
+                loadRealtimeStats(),
+                loadLast24HoursStats(),
+                loadStatusChart(),
+                loadHourlyChart(),
+                loadTopPaths(),
+                loadSlowPaths(),
+                loadTopIPs(),
+                loadSuspiciousIPs(),
+                loadCountryStats(),
+                loadUVStats()
+            ]);
+            
+            // 自动刷新
+            refreshInterval = setInterval(loadRealtimeStats, 10000);
+            setInterval(loadStatusChart, 30000);
+            setInterval(loadHourlyChart, 30000);
+            setInterval(loadTopPaths, 30000);
+            setInterval(loadSlowPaths, 30000);
+            setInterval(loadTopIPs, 30000);
+            setInterval(loadSuspiciousIPs, 30000);
+            setInterval(loadCountryStats, 60000);
+            setInterval(loadUVStats, 120000);
+        }
+        
+        function initCharts() {
+            statusChart = echarts.init(document.getElementById('statusChart'));
+            hourlyChart = echarts.init(document.getElementById('hourlyChart'));
+            countryMapChart = echarts.init(document.getElementById('countryMapChart'));
+            countryChart = echarts.init(document.getElementById('countryChart'));
+            uvTrendChart = echarts.init(document.getElementById('uvTrendChart'));
+            uvHourChart = echarts.init(document.getElementById('uvHourChart'));
+        }
+        
+        // 加载实时统计
+        async function loadRealtimeStats() {
+            try {
+                const response = await axios.get('/api/stats/realtime?hours=1');
+                const stats = response.data.data;
+                
+                const html = `
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.total_requests')}</h3>
+                        <div class="value">${formatNumber(stats.total_requests)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.unique_visitors')}</h3>
+                        <div class="value">${formatNumber(stats.unique_visitors)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.error_rate')}</h3>
+                        <div class="value ${stats.error_rate > 0.1 ? 'status-5xx' : 'status-2xx'}">${(stats.error_rate * 100).toFixed(2)}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.request_rate')}</h3>
+                        <div class="value">${stats.request_rate.toFixed(2)}/s</div>
+                    </div>
+                `;
+
+                document.getElementById('realtimeStats').innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load realtime stats:', error);
+            }
+        }
+        
+        async function loadLast24HoursStats() {
+            try {
+                const response = await axios.get('/api/stats/realtime?hours=24');
+                const stats = response.data.data;
+                
+                const html = `
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.total_requests')}</h3>
+                        <div class="value">${formatNumber(stats.total_requests)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.unique_visitors')}</h3>
+                        <div class="value">${formatNumber(stats.unique_visitors)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.error_rate')}</h3>
+                        <div class="value ${stats.error_rate > 0.1 ? 'status-5xx' : 'status-2xx'}">${(stats.error_rate * 100).toFixed(2)}%</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${i18n.t('stats.request_rate')}</h3>
+                        <div class="value">${stats.request_rate.toFixed(2)}/s</div>
+                    </div>
+                `;
+                
+                document.getElementById('last24HoursStats').innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load realtime stats:', error);
+            }
+        }
+        
+        // 加载状态码图表
+        async function loadStatusChart() {
+            try {
+                const response = await axios.get('/api/stats/status-distribution');
+                const data = response.data.data;
+                
+                const option = {
+                    tooltip: { trigger: 'item', formatter: '{a} <br/>{b}: {c} ({d}%)' },
+                    legend: { bottom: 10 },
+                    series: [{
+                        name: i18n.t('chart.status_dist'),
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: { show: false },
+                        emphasis: { label: { show: true, fontSize: 20, fontWeight: 'bold' } },
+                        data: data ? data.map(item => ({
+                            name: `HTTP ${item.status_code}`,
+                            value: item.count,
+                            itemStyle: { 
+                                color: getStatusColor(item.status_code) 
+                            }
+                        })) : []
+                    }]
+                };
+                
+                statusChart.setOption(option);
+            } catch (error) {
+                console.error('Failed to load status chart:', error);
+            }
+        }
+        
+        // 加载小时图表
+        async function loadHourlyChart() {
+            try {
+                const response = await axios.get('/api/stats/hourly?days=1');
+                const data = response.data.data;
+                
+                const hours = data ? data.map(d => new Date(d.hour).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })) : [];
+                const requests = data ? data.map(d => d.request_count) : [];
+                const uniqueIPs = data ? data.map(d => d.unique_ips) : [];
+                
+                const option = {
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: [i18n.t('legend.requests'), i18n.t('legend.unique_ip_legend')] },
+                    xAxis: { type: 'category', data: hours },
+                    yAxis: [{ type: 'value', name: i18n.t('legend.requests') }, { type: 'value', name: 'IP' }],
+                    series: [
+                        { name: i18n.t('legend.requests'), type: 'line', data: requests, smooth: true },
+                        { name: i18n.t('legend.unique_ip_legend'), type: 'line', yAxisIndex: 1, data: uniqueIPs, smooth: true }
+                    ]
+                };
+                
+                hourlyChart.setOption(option);
+            } catch (error) {
+                console.error('Failed to load hourly chart:', error);
+            }
+        }
+        
+        // 加载热门路径
+        async function loadTopPaths() {
+            try {
+                const response = await axios.get('/api/stats/top-paths?limit=10&hours=24');
+                const data = response.data.data;
+                
+                const tbody = data ? data.map(item => `
+                    <tr>
+                        <td><code>${item.path || '/'}</code></td>
+                        <td>${formatNumber(item.request_count)}</td>
+                        <td>${formatNumber(item.unique_ips)}</td>
+                        <td class="${item.error_rate > 0.1 ? 'status-4xx' : ''}">${(item.error_rate * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('') : '';
+                
+                document.querySelector('#topPathsTable tbody').innerHTML = tbody;
+            } catch (error) {
+                console.error('Failed to load top paths:', error);
+            }
+        }
+
+        // 加载长耗时路径
+        async function loadSlowPaths() {
+            try {
+                const response = await axios.get('/api/stats/slow-paths?limit=10&hours=24&minRequests=10&skipOther=true');
+                const data = response.data.data;
+                
+                const tbody = data ? data.map(item => `
+                    <tr>
+                        <td><code>${item.path || '/'}</code></td>
+                        <td>${formatNumber(item.request_count)}</td>
+                        <td style="color:${getLatencyColor(item.p95_response_time)}">${item.p95_response_time}ms</td>
+                        <td style="color:${getLatencyColor(item.p99_response_time)}">${item.p99_response_time}ms</td>
+                        <td style="color:${getLatencyColor(item.max_response_time)}">${item.max_response_time}ms</td>
+                        <td style="color:${getLatencyColor(item.avg_response_time)}">${item.avg_response_time}ms</td>
+                        <td>${formatBytes(item.avg_response_size * 1024)}</td>
+                        <td class="${item.success_rate < 100 ? 'status-4xx' : ''}">${(item.success_rate).toFixed(1)}%</td>
+                    </tr>
+                `).join('') : '';
+                
+                document.querySelector('#slowPathsTable tbody').innerHTML = tbody;
+            } catch (error) {
+                console.error('Failed to load top durations:', error);
+            }
+        }
+        
+        // 加载热门IP
+        async function loadTopIPs() {
+            try {
+                const response = await axios.get('/api/stats/top-ips?limit=10&hours=24');
+                const data = response.data.data;
+                
+                const tbody = data ? data.map(item => `
+                    <tr>
+                        <td><code>${item.ip || '/'}</code></td>
+                        <td>${formatNumber(item.request_count)}</td>
+                        <td>${formatNumber(item.unique_paths)}</td>
+                        <td class="${item.error_rate > 0.1 ? 'status-4xx' : ''}">${(item.error_rate * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('') : '';
+                
+                document.querySelector('#topIPsTable tbody').innerHTML = tbody;
+            } catch (error) {
+                console.error('Failed to load top IPs:', error);
+            }
+        }
+        
+        // 加载可疑IP
+        async function loadSuspiciousIPs() {
+            try {
+                const response = await axios.get('/api/stats/suspicious-ips?threshold=50');
+                const data = response.data.data;
+                
+                const tbody = data ? data.map(item => `
+                    <tr>
+                        <td><code>${item.ip}</code></td>
+                        <td>${formatNumber(item.request_count)}</td>
+                        <td>${item.request_rate.toFixed(2)}/s</td>
+                        <td class="${item.is_suspicious ? 'status-5xx' : 'status-2xx'}">
+                            ${item.is_suspicious ? '⚠️ ' + i18n.t('common.suspicious') : i18n.t('common.normal')}
+                        </td>
+                    </tr>
+                `).join('') : '';
+                
+                document.querySelector('#suspiciousIPsTable tbody').innerHTML = tbody;
+            } catch (error) {
+                console.error('Failed to load suspicious IPs:', error);
+            }
+        }
+
+        // 加载国家统计
+        async function loadCountryStats() {
+            try {
+                const [mapResponse, chartResponse, tableResponse] = await Promise.all([
+                    axios.get('/api/stats/countries?limit=200&hours=24'),
+                    axios.get('/api/stats/countries?limit=20&hours=24'),
+                    axios.get('/api/stats/countries?limit=15&hours=24')
+                ]);
+                const mapData = mapResponse.data.data;
+                const chartData = chartResponse.data.data;
+                const tableData = tableResponse.data.data;
+
+                // 世界地图（仅当地图数据加载成功时）
+                if (worldMapRegistered && countryMapChart && mapData && mapData.length > 0) {
+                    const mapSeriesData = mapData
+                        .filter(item => item.country !== 'Unknown' && item.country !== '')
+                        .map(item => ({
+                            name: item.country,
+                            value: item.request_count
+                        }));
+
+                    const maxVal = Math.max(...mapSeriesData.map(d => d.value));
+
+                    const mapOption = {
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: function(params) {
+                                if (!params.value) return params.name;
+                                const item = mapData.find(d => d.country === params.name);
+                                if (!item) return params.name;
+                                return `<b>${params.name}</b><br/>` +
+                                    `${i18n.t('table.requests')}: ${formatNumber(item.request_count)}<br/>` +
+                                    `${i18n.t('table.unique_ip')}: ${formatNumber(item.unique_ips)}<br/>` +
+                                    `${i18n.t('table.percentage')}: ${item.percentage.toFixed(2)}%<br/>` +
+                                    `${i18n.t('table.error_rate_col')}: ${(item.error_rate * 100).toFixed(1)}%`;
+                            }
+                        },
+                        visualMap: {
+                            min: 0,
+                            max: maxVal,
+                            left: 'left',
+                            top: 'bottom',
+                            text: [i18n.t('legend.high'), i18n.t('legend.low')],
+                            calculable: true,
+                            inRange: {
+                                color: ['#e8f4fc', '#a5d6f7', '#4da6e3', '#2171b5', '#084594']
+                            }
+                        },
+                        series: [{
+                            type: 'map',
+                            map: 'world',
+                            roam: true,
+                            scaleLimit: { min: 1, max: 10 },
+                            nameProperty: 'name',
+                            label: { show: false },
+                            emphasis: {
+                                label: { show: true, fontSize: 12 },
+                                itemStyle: { areaColor: '#f4e146' }
+                            },
+                            data: mapSeriesData,
+                            itemStyle: {
+                                areaColor: '#f0f0f0',
+                                borderColor: '#d0d0d0'
+                            }
+                        }]
+                    };
+                    countryMapChart.setOption(mapOption);
+                } else if (countryMapChart) {
+                    // 地图数据不可用时显示提示
+                    countryMapChart.setOption({
+                        title: {
+                            text: i18n.t('chart.map_unavailable'),
+                            left: 'center',
+                            top: 'center',
+                            textStyle: { color: '#999', fontSize: 14, fontWeight: 'normal' }
+                        }
+                    });
+                }
+
+                // 饼图
+                const option = {
+                    tooltip: { 
+                        trigger: 'item', 
+                        formatter: '{a} <br/>{b}: {c} ({d}%)' 
+                    },
+                    legend: { 
+                        type: 'scroll',
+                        bottom: 0,
+                        left: 'center'
+                    },
+                    series: [{
+                        name: i18n.t('chart.country_pie'),
+                        type: 'pie',
+                        radius: ['35%', '65%'],
+                        center: ['50%', '45%'],
+                        avoidLabelOverlap: true,
+                        itemStyle: {
+                            borderRadius: 6,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: { 
+                            show: false
+                        },
+                        emphasis: { 
+                            label: { show: true, fontSize: 14, fontWeight: 'bold' } 
+                        },
+                        data: chartData ? chartData.map((item, index) => ({
+                            name: item.country,
+                            value: item.request_count,
+                            itemStyle: { color: getCountryColor(index) }
+                        })) : []
+                    }]
+                };
+                countryChart.setOption(option);
+
+                // 表格
+                const tbody = tableData ? tableData.map(item => `
+                    <tr>
+                        <td>${item.country}</td>
+                        <td>${formatNumber(item.request_count)}</td>
+                        <td>${formatNumber(item.unique_ips)}</td>
+                        <td>${item.percentage.toFixed(2)}%</td>
+                        <td class="${item.error_rate > 0.1 ? 'status-4xx' : ''}">${(item.error_rate * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('') : '';
+                document.querySelector('#topCountriesTable tbody').innerHTML = tbody;
+            } catch (error) {
+                console.error('Failed to load country stats:', error);
+            }
+        }
+
+        // 国家颜色
+        function getCountryColor(index) {
+            const colors = [
+                '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+                '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#768ffc',
+                '#69b5d4', '#95e1d5', '#f38181', '#aa96da', '#fcbad3',
+                '#a8e6cf', '#dcedc1', '#ffd3b6', '#ffaaa5', '#ff8b94',
+                '#c7ceea', '#b5ead7', '#cdb4db', '#ffc8dd', '#ffafcc',
+                '#bde0fe', '#a2d2ff', '#fec89a', '#ffd6a5', '#fdffb6'
+            ];
+            return colors[index % colors.length];
+        }
+
+        // 加载UV统计
+        async function loadUVStats() {
+            try {
+                const [distRes, trendRes] = await Promise.all([
+                    axios.get('/api/stats/uv-distribution?days=7'),
+                    axios.get('/api/stats/uv-trend?days=7')
+                ]);
+                const dist = distRes.data.data;
+                const trend = trendRes.data.data;
+
+                // UV 概览卡片
+                if (dist) {
+                    document.getElementById('uvSummaryCards').innerHTML = `
+                        <div class="stat-card">
+                            <h3>${i18n.t('stats.unique_visitors')} (UV)</h3>
+                            <div class="value">${formatNumber(dist.total_uv)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>PV</h3>
+                            <div class="value">${formatNumber(dist.total_pv)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${i18n.t('stats.avg_pv')}</h3>
+                            <div class="value">${dist.avg_pv_per_user.toFixed(1)}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${i18n.t('stats.new_returning_uv')}</h3>
+                            <div class="value" style="font-size: 20px;">${formatNumber(dist.new_uv)} / ${formatNumber(dist.returning_uv)}</div>
+                            <div class="change">${i18n.t('stats.new_uv_ratio', {rate: dist.new_uv_ratio.toFixed(1)})}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${i18n.t('stats.bounce_rate')}</h3>
+                            <div class="value ${dist.bounce_rate > 70 ? 'status-5xx' : dist.bounce_rate > 50 ? 'status-4xx' : 'status-2xx'}">${dist.bounce_rate.toFixed(1)}%</div>
+                        </div>
+                    `;
+                }
+
+                // UV趋势图
+                if (trend && trend.length > 0) {
+                    const dates = trend.map(d => d.date.substring(0, 10));
+                    const newUV = trend.map(d => d.new_uv);
+                    const returningUV = trend.map(d => d.returning_uv);
+                    const totalUV = trend.map(d => d.total_uv);
+                    const pv = trend.map(d => d.pv);
+
+                    uvTrendChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { data: ['PV', i18n.t('legend.total_uv'), i18n.t('legend.new_visitor'), i18n.t('legend.returning_visitor')] },
+                        grid: { left: 50, right: 30, bottom: 30, top: 40 },
+                        xAxis: { type: 'category', data: dates, axisLabel: { rotate: 0 } },
+                        yAxis: [
+                            { type: 'value', name: 'PV' },
+                            { type: 'value', name: 'UV' }
+                        ],
+                        series: [
+                            { name: 'PV', type: 'bar', data: pv, itemStyle: { color: '#d4dce6' } },
+                            { name: i18n.t('legend.total_uv'), type: 'line', yAxisIndex: 1, data: totalUV, smooth: true, itemStyle: { color: '#1890ff' } },
+                            { name: i18n.t('legend.new_visitor'), type: 'line', yAxisIndex: 1, data: newUV, smooth: true, itemStyle: { color: '#52c41a' }, lineStyle: { type: 'dashed' } },
+                            { name: i18n.t('legend.returning_visitor'), type: 'line', yAxisIndex: 1, data: returningUV, smooth: true, itemStyle: { color: '#fa8c16' }, lineStyle: { type: 'dotted' } }
+                        ]
+                    });
+                }
+
+                // 各时段UV分布图
+                if (dist && dist.hour_uvs && dist.hour_uvs.length > 0) {
+                    const hours = dist.hour_uvs.map(h => new Date(h.hour).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+                    const uvs = dist.hour_uvs.map(h => h.uv);
+
+                    uvHourChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 45, right: 10, bottom: 25, top: 15 },
+                        xAxis: { type: 'category', data: hours, axisLabel: { rotate: 45, fontSize: 10 } },
+                        yAxis: { type: 'value', name: 'UV' },
+                        series: [{
+                            type: 'bar',
+                            data: uvs,
+                            itemStyle: {
+                                color: function(params) {
+                                    const hour = parseInt(hours[params.dataIndex]);
+                                    return (hour >= 9 && hour <= 18) ? '#1890ff' :
+                                           (hour >= 19 || hour <= 2) ? '#722ed1' : '#8c8c8c';
+                                }
+                            }
+                        }]
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load UV stats:', error);
+            }
+        }
+        
+        // 刷新数据
+        async function refreshData() {
+            showLoading(true);
+            try {
+                await axios.post('/api/refresh');
+                await Promise.all([
+                    loadRealtimeStats(),
+                    loadStatusChart(),
+                    loadHourlyChart(),
+                    loadTopPaths(),
+                    loadSuspiciousIPs(),
+                    loadCountryStats(),
+                    loadUVStats()
+                ]);
+                alert(i18n.t('common.refresh_success'));
+            } catch (error) {
+                alert(i18n.t('common.refresh_failed', {msg: error.message}));
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // 自定义查询
+        async function executeCustomQuery() {
+            const sql = document.getElementById('sqlQuery').value.trim();
+            if (!sql) return;
+            
+            try {
+                const response = await axios.post('/api/query', { sql });
+                const data = response.data.data;
+                
+                if (!data || data.length === 0) {
+                    document.getElementById('queryResult').innerHTML = '<div class="error">' + i18n.t('common.no_results') + '</div>';
+                    return;
+                }
+                
+                const headers = Object.keys(data[0]);
+                const rows = data.map(row => headers.map(h => row[h]));
+                
+                let html = '<table border="1" style="width: 100%;">';
+                html += '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+                html += rows.map(row => '<tr>' + row.map(cell => `<td>${cell}</td>`).join('') + '</tr>').join('');
+                html += '</table>';
+                
+                document.getElementById('queryResult').innerHTML = html;
+            } catch (error) {
+                document.getElementById('queryResult').innerHTML = 
+                    `<div class="error">${i18n.t('common.query_failed', {msg: error.response?.data?.message || error.message})}</div>`;
+            }
+        }
+        
+        // 辅助函数
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function formatBytes(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let value = bytes;
+            let unitIndex = 0;
+            
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex++;
+            }
+            
+            return value.toFixed(1) + ' ' + units[unitIndex];
+        }
+        
+        function getStatusColor(status) {
+            if (status < 300) return '#52c41a';
+            if (status < 400) return '#1890ff';
+            if (status < 500) return '#fa8c16';
+            return '#f5222d';
+        }
+        
+        function getLatencyColor(ms) {
+            if (ms <= 100) return '#52c41a';  // 绿色
+            if (ms <= 500) return '#fa8c16';  // 橙色
+            return '#f5222d';  // 红色
+        }
+        
+        function showQueryModal() {
+            document.getElementById('queryModal').style.display = 'block';
+        }
+        
+        function hideQueryModal() {
+            document.getElementById('queryModal').style.display = 'none';
+            document.getElementById('queryResult').innerHTML = '';
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+        
+        // 页面加载
+        window.onload = init;
+        window.addEventListener('resize', () => {
+            statusChart?.resize();
+            hourlyChart?.resize();
+            countryMapChart?.resize();
+            countryChart?.resize();
+            uvTrendChart?.resize();
+            uvHourChart?.resize();
+        });
+    </script>
+</body>
+</html>
