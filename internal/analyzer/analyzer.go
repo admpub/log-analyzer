@@ -20,7 +20,7 @@ type LogAnalyzer struct {
 	db          *sql.DB
 	logDir      string
 	logFile     string
-	logFormat   string // combined / common / combined2
+	logFormat   string // combined / common / combinedCHD / combinedD
 	logParquet  bool
 	logger      zerolog.Logger
 	cache       *StatsCache

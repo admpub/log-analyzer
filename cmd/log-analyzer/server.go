@@ -20,6 +20,19 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// 应用元数据（集中管理版本信息）
+var appMeta = struct {
+	Version     string
+	Name        string
+	Description string
+	Author      string
+}{
+	Version:     "1.0.0",
+	Name:        "Nginx Log Analyzer",
+	Description: "Real-time Nginx/Apache log analysis system based on DuckDB + Parquet",
+	Author:      "admpub",
+}
+
 // ========== Server Config & Helpers ==========
 
 type Config struct {
@@ -110,6 +123,7 @@ func setupRouter(cfg *Config, a *analyzer.LogAnalyzer, logger zerolog.Logger) *g
 	router := gin.New()
 
 	router.Use(gin.Recovery())
+	// 生产环境建议将 AllowOrigins 限制为具体域名，避免与 AllowCredentials: true 组合使用通配符
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -118,6 +132,9 @@ func setupRouter(cfg *Config, a *analyzer.LogAnalyzer, logger zerolog.Logger) *g
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// 限制请求体大小（默认 10MB），防止大请求导致内存耗尽
+	router.MaxMultipartMemory = 10 << 20 // 10 MB
 
 	router.Use(func(c *gin.Context) {
 		start := time.Now()
@@ -175,19 +192,30 @@ func setupRouter(cfg *Config, a *analyzer.LogAnalyzer, logger zerolog.Logger) *g
 
 		apiGroup.GET("/metadata", func(c *gin.Context) {
 			api.Success(c, gin.H{
-				"name":        "Nginx Log Analyzer",
-				"version":     "1.0.0",
-				"description": "Real-time Nginx log analysis system",
-				"author":      "Your Team",
+				"name":        appMeta.Name,
+				"version":     appMeta.Version,
+				"description": appMeta.Description,
+				"author":      appMeta.Author,
 				"endpoints": []string{
+					// 统计分析
 					"GET    /api/stats/realtime",
 					"GET    /api/stats/top-paths",
+					"GET    /api/stats/slow-paths",
+					"GET    /api/stats/analyze-path",
+					"GET    /api/stats/path-detail",
+					"GET    /api/stats/slow-requests",
+					"GET    /api/stats/top-ips",
 					"GET    /api/stats/hourly",
 					"GET    /api/stats/status-distribution",
+					"GET    /api/stats/countries",
+					"GET    /api/stats/uv-trend",
+					"GET    /api/stats/uv-distribution",
 					"GET    /api/stats/suspicious-ips",
+					// 系统操作
 					"POST   /api/refresh",
 					"POST   /api/query",
 					"GET    /api/health",
+					"GET    /api/debug",
 				},
 			})
 		})

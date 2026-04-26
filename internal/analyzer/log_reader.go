@@ -51,7 +51,7 @@ type QueryOptions struct {
 
 func rewriteHttpLogColumns(logFormat string) string {
 	var pathAndQueryString string
-	if logFormat == `combined2` {
+	if logFormat == `combinedCHD` {
 		pathAndQueryString = `split_part(path, '?', 2) AS query_string, split_part(path, '?', 1) AS path, `
 	} else {
 		pathAndQueryString = `query_string, path, `
