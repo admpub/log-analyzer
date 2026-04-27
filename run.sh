@@ -11,6 +11,9 @@ case "$CMD" in
   "convert"|"cli")
     CGO_ENABLED=1 go run ./cmd/log-analyzer/ convert "$@"
     ;;
+  "build")
+    CGO_ENABLED=1 go build -o log-analyzer ./cmd/log-analyzer/
+    ;;
   *)
     echo "用法: run.sh [command] [options]"
     echo ""

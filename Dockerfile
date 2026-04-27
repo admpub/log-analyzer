@@ -1,20 +1,24 @@
-# 构建阶段
-FROM golang:1.26-alpine AS builder
-RUN apk --no-cache add gcc musl-dev
+# # 构建阶段
+# FROM golang:1.26-alpine AS builder
+# RUN apk --no-cache add gcc musl-dev
 
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go env -w GOPROXY=goproxy.cn,direct && go mod download
+# WORKDIR /app
 
-COPY . .
-RUN CGO_ENABLED=1 GOOS=linux go build -o log-analyzer ./cmd/log-analyzer/
+# COPY go.mod go.sum ./
+# RUN go env -w GOPROXY=goproxy.cn,direct
+# RUN CGO_ENABLED=1 go mod download
+# RUN go env
+
+# COPY . .
+# RUN CGO_ENABLED=1 go build -o log-analyzer ./cmd/log-analyzer/
 
 # 运行阶段
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app/
-COPY --from=builder /app/log-analyzer .
+# COPY --from=builder /app/log-analyzer .
+COPY log-analyzer .
 COPY config/config_docker.yaml ./config/config.yaml
 COPY web/static ./web/static
 

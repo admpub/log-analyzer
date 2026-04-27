@@ -1,3 +1,5 @@
 *.parquet
 *.db
 *.log
+/vendor
+/log-analyzer
