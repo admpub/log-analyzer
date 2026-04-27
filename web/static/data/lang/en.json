@@ -49,7 +49,7 @@
     "status_dist": "Status Code Distribution (Last 24h)",
     "hourly_trend": "Hourly Request Trend",
     "country_map": "Access Source Country/Region Distribution (Last 24h)",
-    "country_top15": "Top 15 Country/Region by Traffic",
+    "country_top15": "Top 15 Countries/Regions by Traffic",
     "country_pie": "Country/Region Distribution Ratio",
     "uv_analysis": "UV Visitor Analysis (Last 7d)",
     "uv_pv_trend": "UV/PV Trend (Last 7d)",
