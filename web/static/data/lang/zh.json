@@ -126,7 +126,7 @@
     "view_slow_req": "查看慢请求",
     "export_path": "导出数据",
     "load_detail_fail": "加载路径详情失败: {msg}",
-    "load_slow_fail": "加载慢请沂失败: {msg}",
+    "load_slow_fail": "加载慢请求失败: {msg}",
     "load_fail": "加载数据失败: {msg}",
     "time_opt_1h": "最近1小时",
     "time_opt_6h": "最近6小时",
@@ -193,7 +193,7 @@
     "col_resp_size": "响应大小",
     "col_client_ip": "客户端IP",
     "col_user_agent": "UserAgent",
-    "no_slow_req": "没有找到慢请沂记录",
+    "no_slow_req": "没有找到慢请求记录",
     "no_patterns": "没有检测到明显的相关模式",
     "enter_path": "请输入覌分析的路径",
     "analysis_first": "请先进行分析",
@@ -248,7 +248,7 @@
     "report_resp_size_label": "响应大小",
     "report_time_period_label": "时段",
     "report_patterns_detected": "**检测到的模式**:",
-    "report_slow_req_section": "### 慢请沂详情",
+    "report_slow_req_section": "### 慢请求详情",
     "report_time_header": "时间",
     "report_latency_ms_header": "耗时(ms)",
     "report_status_code_col": "状态码",
@@ -271,13 +271,13 @@
     "corr_name": "相关性"
   },
   "tooltip": {
-    "req_count": "请沂数: {cnt}",
+    "req_count": "请求数: {cnt}",
     "unique_ip_tip": "独立IP: {cnt}",
     "percentage_tip": "占比: {pct}%",
     "err_rate_tip": "错误率: {rate}%",
     "p95_tip": "P95耗时: {ms}ms",
     "avg_tip": "平均耗时: {ms}ms",
-    "req_cnt_tip": "请沂数: {cnt}"
+    "req_cnt_tip": "请求数: {cnt}"
   },
   "status_text": {
     "excellent": "✅ 优秀",
