@@ -353,7 +353,7 @@ type IPAnalysis struct {
 	Country      string  `json:"country,omitempty"`
 }
 
-// CountryStats 国家访问统计
+// CountryStats 国家/地区访问统计
 type CountryStats struct {
 	Country      string  `json:"country"`
 	RequestCount int64   `json:"request_count"`
@@ -366,27 +366,27 @@ type CountryStats struct {
 type UVTrend struct {
 	Date        string  `json:"date"`
 	NewUV       int64   `json:"new_uv"`        // 新访客数
-	ReturningUV int64   `json:"returning_uv"`   // 回访客数
-	TotalUV     int64   `json:"total_uv"`       // 总UV = NewUV + ReturningUV
-	PV          int64   `json:"pv"`             // 页面浏览量(PV)
-	AvgPVPerUV  float64 `json:"avg_pv_per_uv"`  // 人均PV
+	ReturningUV int64   `json:"returning_uv"`  // 回访客数
+	TotalUV     int64   `json:"total_uv"`      // 总UV = NewUV + ReturningUV
+	PV          int64   `json:"pv"`            // 页面浏览量(PV)
+	AvgPVPerUV  float64 `json:"avg_pv_per_uv"` // 人均PV
 }
 
 // UVDistribution UV分布概览
 type UVDistribution struct {
-	TotalUV         int64   `json:"total_uv"`          // 总独立访客
-	TotalPV         int64   `json:"total_pv"`           // 总页面浏览量
-	NewUV           int64   `json:"new_uv"`             // 新访客数
-	ReturningUV     int64   `json:"returning_uv"`       // 回访客数
-	NewUVRatio      float64 `json:"new_uv_ratio"`       // 新访客占比
-	AvgPVPerUser    float64 `json:"avg_pv_per_user"`    // 人均PV
-	BounceRate      float64 `json:"bounce_rate"`        // 跳出率(只访问1次的IP占比)
-	HotHourUVs      []HourUV `json:"hour_uvs,omitempty"` // 各时段UV分布
+	TotalUV      int64    `json:"total_uv"`           // 总独立访客
+	TotalPV      int64    `json:"total_pv"`           // 总页面浏览量
+	NewUV        int64    `json:"new_uv"`             // 新访客数
+	ReturningUV  int64    `json:"returning_uv"`       // 回访客数
+	NewUVRatio   float64  `json:"new_uv_ratio"`       // 新访客占比
+	AvgPVPerUser float64  `json:"avg_pv_per_user"`    // 人均PV
+	BounceRate   float64  `json:"bounce_rate"`        // 跳出率(只访问1次的IP占比)
+	HotHourUVs   []HourUV `json:"hour_uvs,omitempty"` // 各时段UV分布
 }
 
 // HourUV 小时级UV
 type HourUV struct {
-	Hour   string `json:"hour"`
-	UV     int64  `json:"uv"`
-	PV     int64  `json:"pv"`
+	Hour string `json:"hour"`
+	UV   int64  `json:"uv"`
+	PV   int64  `json:"pv"`
 }
