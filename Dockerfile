@@ -1,9 +1,10 @@
 # 构建阶段
 FROM golang:1.26-alpine AS builder
+RUN apk --no-cache add gcc musl-dev
 
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go env -w GOPROXY=goproxy.cn,direct && go mod download
 
 COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -o log-analyzer ./cmd/log-analyzer/
