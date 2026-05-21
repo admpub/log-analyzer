@@ -54,7 +54,7 @@ func runConvert() {
   log-analyzer convert -i access.log -o logs.parquet --start-time "2026-01-01T00:00:00"
 
   # 指定日志格式
-  log-analyzer convert -i access.log -o logs.parquet -format combined
+  log-analyzer convert -i access.log -o logs.parquet --format combined
 
   # 带 GeoIP 地理位置解析
   log-analyzer convert -i access.log -o logs.parquet --geoip-db GeoLite2-City.mmdb
