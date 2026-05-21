@@ -21,7 +21,7 @@ var supportedFormats = "combined, common, combinedCHD, combinedD"
 func runConvert() {
 	var (
 		input        string
-		output       string
+		output       string = "output.parquet"
 		format       string
 		geoipDB      string
 		partition    bool
@@ -29,48 +29,49 @@ func runConvert() {
 		startTime    string
 		overwrite    bool
 	)
-	flag.StringVar(&input, "input", "", "输入日志文件路径（必填）")
-	flag.StringVar(&input, "i", "", "输入日志文件路径的简写")
-	flag.StringVar(&output, "output", "output.parquet", "输出parquet文件或目录路径")
-	flag.StringVar(&output, "o", "output.parquet", "输出parquet文件路径的简写")
-	flag.StringVar(&format, "format", "combined", "日志格式: "+supportedFormats)
-	flag.StringVar(&geoipDB, "geoip-db", "", "GeoIP数据库路径(如 GeoLite2-City.mmdb)，用于自动填充国家/城市")
-	flag.BoolVar(&partition, "partition", false, "是否按年月日时分区输出到目录")
-	flag.BoolVar(&overwrite, "overwrite", false, "是否覆盖已有输出文件")
-	flag.DurationVar(&queryTimeout, "timeout", 10*time.Minute, "查询超时时间")
-	flag.StringVar(&startTime, "start-time", "", "开始时间过滤 (RFC3339 或 '2006-01-02 15:04:05' 格式)")
+	fs := flag.NewFlagSet("convert", flag.ExitOnError)
+	fs.StringVar(&input, "input", input, "输入日志文件路径（必填）")
+	fs.StringVar(&input, "i", input, "输入日志文件路径的简写")
+	fs.StringVar(&output, "output", output, "输出parquet文件或目录路径")
+	fs.StringVar(&output, "o", output, "输出parquet文件路径的简写")
+	fs.StringVar(&format, "format", "combined", "日志格式: "+supportedFormats)
+	fs.StringVar(&geoipDB, "geoip-db", "", "GeoIP数据库路径(如 GeoLite2-City.mmdb)，用于自动填充国家/城市")
+	fs.BoolVar(&partition, "partition", false, "是否按年月日时分区输出到目录")
+	fs.BoolVar(&overwrite, "overwrite", false, "是否覆盖已有输出文件")
+	fs.DurationVar(&queryTimeout, "timeout", 10*time.Minute, "查询超时时间")
+	fs.StringVar(&startTime, "start-time", "", "开始时间过滤 (RFC3339 或 '2006-01-02 15:04:05' 格式)")
 
-	flag.Usage = func() {
+	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `log-analyzer convert — 将 Nginx/Apache 日志转换为 Parquet 格式
 
 用法:
-  log-analyzer convert [选项] --input <日志文件> --output <输出.parquet>
+  log-analyzer convert [选项] -input <日志文件> -output <输出.parquet>
 
 示例:
   # 基本转换（默认 combined 格式）
   log-analyzer convert -i access.log -o logs.parquet
 
   # 指定开始时间过滤
-  log-analyzer convert -i access.log -o logs.parquet --start-time "2026-01-01T00:00:00"
+  log-analyzer convert -i access.log -o logs.parquet -start-time "2026-01-01T00:00:00"
 
   # 指定日志格式
-  log-analyzer convert -i access.log -o logs.parquet --format combined
+  log-analyzer convert -i access.log -o logs.parquet -format combined
 
   # 带 GeoIP 地理位置解析
-  log-analyzer convert -i access.log -o logs.parquet --geoip-db GeoLite2-City.mmdb
+  log-analyzer convert -i access.log -o logs.parquet -geoip-db GeoLite2-City.mmdb
 
   # 按年/月/日/时分区输出到目录
-  log-analyzer convert -i access.log -o output_dir/ --partition
+  log-analyzer convert -i access.log -o output_dir/ -partition
 
 选项:`)
-		flag.PrintDefaults()
+		fs.PrintDefaults()
 	}
 
-	flag.Parse()
+	fs.Parse(os.Args[2:])
 
 	if input == "" {
 		fmt.Fprintln(os.Stderr, "错误: 必须指定输入日志文件 (--input / -i)")
-		flag.Usage()
+		fs.Usage()
 		os.Exit(1)
 	}
 

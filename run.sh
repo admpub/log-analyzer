@@ -23,8 +23,8 @@ case "$CMD" in
     echo ""
     echo "示例:"
     echo "  ./run.sh server                          # 启动Web服务"
-    echo "  ./run.sh convert --input access.log --output out.parquet"
-    echo "  ./run.sh convert --input access.log --output out/ --partition --geoip-db GeoLite2-City.mmdb"
+    echo "  ./run.sh convert -input access.log -output out.parquet"
+    echo "  ./run.sh convert -input access.log -output out/ -partition -geoip-db GeoLite2-City.mmdb"
     exit 1
     ;;
 esac
