@@ -121,18 +121,14 @@ jobs:
           retention-days: 30
 
   # ============================================================
-  # macOS 构建 (amd64 / arm64 — Apple Silicon)
+  # macOS 构建 (arm64 + 交叉编译 amd64)
   # ============================================================
   build-darwin:
     name: Build macOS (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     strategy:
       matrix:
-        include:
-          - arch: amd64
-            runner: macos-13
-          - arch: arm64
-            runner: macos-14
+        arch: [amd64, arm64]
       fail-fast: false
     steps:
       - name: Checkout
