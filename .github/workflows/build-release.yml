@@ -1,0 +1,254 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.0.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # ============================================================
+  # Linux 构建 (amd64 / arm64)
+  # ============================================================
+  build-linux:
+    name: Build Linux (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Prepare dependencies
+        run: |
+          go env -w GOPROXY=https://proxy.golang.org,direct
+          go mod download
+          go mod vendor
+
+      - name: Build (amd64)
+        if: matrix.arch == 'amd64'
+        run: |
+          CGO_ENABLED=1 CC=gcc GOOS=linux GOARCH=amd64 \
+            go build -mod=vendor -ldflags="-s -w" \
+            -o log-analyzer-linux-amd64 ./cmd/log-analyzer/
+          chmod +x log-analyzer-linux-amd64
+          sha256sum log-analyzer-linux-amd64 > log-analyzer-linux-amd64.sha256
+
+      - name: Build (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc GOOS=linux GOARCH=arm64 \
+            go build -mod=vendor -ldflags="-s -w" \
+            -o log-analyzer-linux-arm64 ./cmd/log-analyzer/
+          chmod +x log-analyzer-linux-arm64
+          sha256sum log-analyzer-linux-arm64 > log-analyzer-linux-arm64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-analyzer-linux-${{ matrix.arch }}
+          path: |
+            log-analyzer-linux-${{ matrix.arch }}*
+          retention-days: 30
+
+  # ============================================================
+  # Windows 构建 (amd64)
+  # ============================================================
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup MinGW (CGO for Windows)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+
+      - name: Prepare dependencies
+        shell: msys2 {0}
+        run: |
+          go env -w GOPROXY=https://proxy.golang.org,direct
+          go mod download
+          go mod vendor
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          $env:CGO_ENABLED = "1"
+          $env:CC = "gcc"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          go build -mod=vendor -ldflags="-s -w" -o log-analyzer-windows-amd64.exe ./cmd/log-analyzer/
+
+      - name: Generate checksum
+        shell: pwsh
+        run: |
+          Get-FileHash log-analyzer-windows-amd64.exe -Algorithm SHA256 | Format-List Hash | Out-File log-analyzer-windows-amd64.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-analyzer-windows-amd64
+          path: |
+            log-analyzer-windows-amd64.exe
+            log-analyzer-windows-amd64.sha256
+          retention-days: 30
+
+  # ============================================================
+  # macOS 构建 (amd64 / arm64 — Apple Silicon)
+  # ============================================================
+  build-darwin:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-14
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Prepare dependencies
+        run: |
+          go env -w GOPROXY=https://proxy.golang.org,direct
+          go mod download
+          go mod vendor
+
+      - name: Build
+        run: |
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} \
+            go build -mod=vendor -ldflags="-s -w" \
+            -o log-analyzer-darwin-${{ matrix.arch }} ./cmd/log-analyzer/
+          shasum -a 256 log-analyzer-darwin-${{ matrix.arch }} > log-analyzer-darwin-${{ matrix.arch }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-analyzer-darwin-${{ matrix.arch }}
+          path: |
+            log-analyzer-darwin-${{ matrix.arch }}*
+          retention-days: 30
+
+  # ============================================================
+  # 创建 GitHub Release（汇总所有产物）
+  # ============================================================
+  release:
+    name: Create Release
+    needs: [build-linux, build-windows, build-darwin]
+    if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lh artifacts/ && shasum -c artifacts/*.sha256 2>/dev/null || true
+
+      - name: Generate CHANGELOG
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [[ "$PREV_TAG" == "${{ steps.version.outputs.tag }}" ]]; then
+            PREV_TAG=""
+          fi
+          if [[ -n "$PREV_TAG" ]]; then
+            CHANGELOG=$(git log ${PREV_TAG}..${{ steps.version.outputs.tag }} --pretty=format:"- %s (%h)" --no-merges || echo "- Initial release")
+          else
+            CHANGELOG="- Initial release"
+          fi
+          # 转义 JSON 特殊字符
+          CHANGELOG="${CHANGELOG//'\"'/'\"'\"'}"
+          CHANGELOG="${CHANGELOG//$'\n'/\\n}"
+          echo "body=$CHANGELOG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "log-analyzer ${{ steps.version.outputs.tag }}"
+          body: |
+            ## Changes
+            ${{ steps.changelog.outputs.body }}
+
+            ## Downloads
+            | Platform | Architecture | File |
+            |----------|-------------|------|
+            | Linux | x86_64 | `log-analyzer-linux-amd64` |
+            | Linux | ARM64 | `log-analyzer-linux-arm64` |
+            | Windows | x86_64 | `log-analyzer-windows-amd64.exe` |
+            | macOS (Intel) | x86_64 | `log-analyzer-darwin-amd64` |
+            | macOS (Apple Silicon) | ARM64 | `log-analyzer-darwin-arm64` |
+
+            ### Usage
+            ```bash
+            # Server mode
+            ./log-analyzer server
+
+            # Convert logs to Parquet
+            ./log-analyzer convert -i access.log -o output.parquet --partition
+            ```
+
+            ### Verify integrity
+            ```bash
+            sha256sum -c log-analyzer-<platform>-<arch>.sha256
+            ```
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
