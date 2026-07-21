@@ -200,14 +200,16 @@ jobs:
             PREV_TAG=""
           fi
           if [[ -n "$PREV_TAG" ]]; then
-            CHANGELOG=$(git log ${PREV_TAG}..${{ steps.version.outputs.tag }} --pretty=format:"- %s (%h)" --no-merges || echo "- Initial release")
+            CHANGELOG=$(git log "${PREV_TAG}..${{ steps.version.outputs.tag }}" --pretty=format:"- %s (%h)" --no-merges || echo "- Initial release")
           else
             CHANGELOG="- Initial release"
           fi
-          # 转义 JSON 特殊字符
-          CHANGELOG="${CHANGELOG//'\"'/'\"'\"'}"
-          CHANGELOG="${CHANGELOG//$'\n'/\\n}"
-          echo "body=$CHANGELOG" >> $GITHUB_OUTPUT
+          # Write changelog as multi-line output using heredoc delimiter
+          {
+            echo "body<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
